@@ -7,7 +7,7 @@ import vector.Vector3f;
 
 public class Player extends Box {
 	RigidBody3 playerbody;
-	final float acceleration = 100f;
+	final float acceleration = 20f;
 	final float maxspeed = 20f;
 	final float maxspeedSqared = maxspeed * maxspeed;
 

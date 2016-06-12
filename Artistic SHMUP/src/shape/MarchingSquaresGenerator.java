@@ -26,9 +26,7 @@ public class MarchingSquaresGenerator {
 				float brX = tlX + gridwidth;
 				float brZ = tlZ + gridwidth;
 
-				System.out.println(tl + "; " + tr + "; " + bl + "; " + br);
 				if (!((tl && tr && bl && br) || (!tl && !tr && !bl && !br))) {
-					System.out.println("A");
 					if (tl && tr && bl) {
 						System.out.println("1");
 						obj.addVertex(new Vector3f(tlX, topY, tlZ));
@@ -43,7 +41,7 @@ public class MarchingSquaresGenerator {
 						obj.addTriangle(index, index + 2, index + 1);
 						obj.addTriangle(index, index + 3, index + 2);
 						obj.addTriangle(index, index + 4, index + 3);
-						obj.addQuad(index + 2, index + 3, index + 5, index + 6);
+						obj.addQuad(index + 2, index + 3, index + 6, index + 5);
 
 						index += 7;
 					} else if (tr && bl && br) {
@@ -60,7 +58,7 @@ public class MarchingSquaresGenerator {
 						obj.addTriangle(index, index + 2, index + 1);
 						obj.addTriangle(index, index + 3, index + 2);
 						obj.addTriangle(index, index + 4, index + 3);
-						obj.addQuad(index + 2, index + 3, index + 5, index + 6);
+						obj.addQuad(index + 2, index + 3, index + 6, index + 5);
 
 						index += 7;
 					} else if (bl && br && tl) {
@@ -77,7 +75,7 @@ public class MarchingSquaresGenerator {
 						obj.addTriangle(index, index + 2, index + 1);
 						obj.addTriangle(index, index + 3, index + 2);
 						obj.addTriangle(index, index + 4, index + 3);
-						obj.addQuad(index + 2, index + 3, index + 5, index + 6);
+						obj.addQuad(index + 2, index + 3, index + 6, index + 5);
 
 						index += 7;
 					} else if (br && tl && tr) {
@@ -94,7 +92,7 @@ public class MarchingSquaresGenerator {
 						obj.addTriangle(index, index + 2, index + 1);
 						obj.addTriangle(index, index + 3, index + 2);
 						obj.addTriangle(index, index + 4, index + 3);
-						obj.addQuad(index + 2, index + 3, index + 5, index + 6);
+						obj.addQuad(index + 2, index + 3, index + 6, index + 5);
 
 						index += 7;
 					} else if (!tl && !tr && !bl) {

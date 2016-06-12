@@ -1,6 +1,8 @@
 package game;
 
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
 
 import broadphase.SAP;
 import display.DisplayMode;
@@ -19,6 +21,7 @@ import manifold.SimpleManifoldManager;
 import math.VecMath;
 import narrowphase.EPA;
 import narrowphase.GJK;
+import objects.CollisionShape3;
 import objects.Player;
 import objects.RigidBody3;
 import objects.ShapedObject3;
@@ -56,6 +59,11 @@ public class Game extends StandardGame {
 	Complexf playerrotation = new Complexf();
 	final Vector3f cameraOffset = new Vector3f(0, 10, 10);
 	Vector3f transformedCameraOffset = new Vector3f();
+	
+	Sphere shotgeometry;
+	CollisionShape3 shotcollisionshape;
+	List<ShapedObject3> shotsGeometries;
+	List<RigidBody3> shotsBodies;
 
 	@Override
 	public void init() {
@@ -84,10 +92,16 @@ public class Game extends StandardGame {
 		Font font = FontLoader.loadFont("res/fonts/DejaVuSans.ttf");
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface,
 				font, cam);
-		physicsdebug = new PhysicsDebug(inputs, font, space);
+		physicsdebug = new PhysicsDebug(inputs, font, space, defaultshader);
 
 		generateLevel(100);
+		
+		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
+		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
+		shotsGeometries = new ArrayList<ShapedObject3>();
+		shotsBodies = new ArrayList<RigidBody3>();
+		
 		player = new Player(0, 0, 0);
 		space.addRigidBody(player, player.getBody());
 		bluecolorshader.addObject(player);
@@ -110,9 +124,9 @@ public class Game extends StandardGame {
 		
 		boolean[][] testarray = {
 			{false, false, false, false, false},
+			{false, false, true, false, false},
 			{false, true, true, true, false},
-			{false, true, true, true, false},
-			{false, true, true, true, false},
+			{false, false, true, false, false},
 			{false, false, false, false, false},
 		};
 		ShapedObject3 testobject = MarchingSquaresGenerator.generate(testarray, 1f);
@@ -128,7 +142,7 @@ public class Game extends StandardGame {
 		Input inputKeyDown = new Input(Input.KEYBOARD_EVENT, "S", KeyInput.KEY_DOWN);
 		Input inputKeyLeft = new Input(Input.KEYBOARD_EVENT, "A", KeyInput.KEY_DOWN);
 		Input inputKeyRight = new Input(Input.KEYBOARD_EVENT, "D", KeyInput.KEY_DOWN);
-		Input inputMouseLeft = new Input(Input.MOUSE_EVENT, "Left", MouseInput.MOUSE_BUTTON_PRESSED);
+		Input inputMouseLeft = new Input(Input.MOUSE_EVENT, "Left", MouseInput.MOUSE_BUTTON_DOWN);
 
 		eventUp = new InputEvent("Up", inputKeyUp);
 		eventDown = new InputEvent("Down", inputKeyDown);
@@ -169,15 +183,22 @@ public class Game extends StandardGame {
 		if (eventShoot.isActive()) {
 			Vector3f spawnposition = new Vector3f(player.getTranslation());
 			spawnposition.translate(-playerfront.x, 0, -playerfront.z);
-			Sphere c = new Sphere(spawnposition, 0.2f, 36, 36);
-			c.setColor(Color.RED);
-			RigidBody3 rb = new RigidBody3(PhysicsShapeCreator.create(c));
+			ShapedObject3 shot = new ShapedObject3(spawnposition);
+			shot.setVAOHandle(shotgeometry.getVAOHandle());
+			shot.setVBOColorHandle(shotgeometry.getVBOColorHandle());
+			shot.setVBOIndexHandle(shotgeometry.getVBOIndexHandle());
+			shot.setVBOVertexHandle(shotgeometry.getVBOVertexHandle());
+			shot.setRenderedIndexCount(shotgeometry.getRenderedIndexCount());
+			RigidBody3 rb = new RigidBody3(shotcollisionshape);
 			rb.setMass(1);
 			rb.setInertia(new Quaternionf());
 			rb.setLinearFactor(new Vector3f(1, 0, 1));
 			rb.applyCentralImpulse(VecMath.scale(playerfront, -100));
-			space.addRigidBody(c, rb);
-			defaultshader.addObject(c);
+			space.addRigidBody(shot, rb);
+			space.addCollisionFilter(player.getBody(), rb);
+			defaultshader.addObject(shot);
+			shotsGeometries.add(shot);
+			shotsBodies.add(rb);
 		}
 
 		move.transform(playerrotation);
@@ -199,7 +220,22 @@ public class Game extends StandardGame {
 
 		space.update(delta);
 		physicsdebug.update();
-		System.out.println(testrb.getTranslation() + "; " + testrb.getRotation());
+		
+		for(int i = 0; i < shotsBodies.size(); i++) {
+			if(space.hasCollision(shotsBodies.get(i))) {
+				System.out.println("Hit!");
+				
+				ShapedObject3 shotGeometry = shotsGeometries.remove(i);
+				RigidBody3 shotBody = shotsBodies.remove(i);
+				space.removeRigidBody(shotGeometry, shotBody);
+				shotGeometry.deleteData();
+				defaultshader.removeObject(shotGeometry);
+				space.removeCollisionFilter(player.getBody(), shotBody);
+				System.out.println(space.getCollisionFilters().size());
+				i--;
+			}
+		}
+		//System.out.println(space.hasOverlap(testrb) + "; " + space.hasCollision(testrb) + "; " + testrb.getTranslation() + "; " + testrb.getRotation());
 
 		cam.translateTo(player.getTranslation());
 		cam.translate(transformedCameraOffset);
