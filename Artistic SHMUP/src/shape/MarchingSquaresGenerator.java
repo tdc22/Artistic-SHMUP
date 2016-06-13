@@ -221,7 +221,7 @@ public class MarchingSquaresGenerator {
 					obj.addVertex(new Vector3f(brX, topY, brZ));
 					obj.addVertex(new Vector3f(brX, topY, tlZ));
 
-					obj.addQuad(index, index+1, index+2, index+3);
+					obj.addQuad(index, index + 1, index + 2, index + 3);
 					index += 4;
 				}
 			}
