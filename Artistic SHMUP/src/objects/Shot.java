@@ -21,7 +21,7 @@ public class Shot extends ShapedObject3 {
 		body = new RigidBody3(shotcollisionshape);
 		body.setMass(1);
 		body.setInertia(new Quaternionf());
-		body.setLinearFactor(new Vector3f(1, 0, 1));
+		body.setLinearFactor(new Vector3f(1, 1, 1));
 		body.applyCentralImpulse(VecMath.scale(playerfront, -100));
 	}
 

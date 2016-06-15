@@ -12,6 +12,7 @@ public class StandardCannon extends Cannon {
 	CollisionShape3 shotcollisionshape;
 	int lastshot;
 	final int minTimeBetweenShoot = 100;
+	boolean canShoot = true;
 
 	public StandardCannon(Game game, PhysicsSpace space, Ship ship, Vector3f relativetranslation, Shader shotshader,
 			ShapedObject3 shotgeometry, CollisionShape3 shotcollisionshape) {
@@ -24,10 +25,18 @@ public class StandardCannon extends Cannon {
 
 	@Override
 	public void tickShoot(int delta) {
-		lastshot += delta;
-		if (lastshot >= minTimeBetweenShoot) {
-			lastshot %= minTimeBetweenShoot;
+		if (!canShoot) {
+			lastshot += delta;
+			if (lastshot >= minTimeBetweenShoot) {
+				lastshot %= minTimeBetweenShoot;
+				canShoot = true;
+			}
+		}
+	}
 
+	@Override
+	public void shoot() {
+		if (canShoot) {
 			Vector3f spawnposition = new Vector3f(relativetranslation);
 			spawnposition.transform(ship.getRotation());
 			spawnposition.translate(ship.getTranslation());
@@ -36,6 +45,9 @@ public class StandardCannon extends Cannon {
 			space.addCollisionFilter(ship.getBody(), shot.getBody());
 			shotshader.addObject(shot);
 			game.addShot(shot);
+
+			canShoot = false;
+			lastshot = 0;
 		}
 	}
 }

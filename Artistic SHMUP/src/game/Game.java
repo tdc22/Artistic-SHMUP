@@ -33,6 +33,7 @@ import physics.PhysicsSpace;
 import positionalcorrection.ProjectionCorrection;
 import quaternion.Complexf;
 import resolution.SimpleLinearImpulseResolution;
+import shader.PostProcessingShader;
 import shader.Shader;
 import shape.Box;
 import shape.MarchingSquaresGenerator;
@@ -65,14 +66,17 @@ public class Game extends StandardGame {
 	final Vector3f cameraOffset = new Vector3f(0, 10, 10);
 	Vector3f transformedCameraOffset = new Vector3f();
 
-	int levelsizeX = 100;
-	int levelsizeZ = 100;
-	int splashResolution = 1000;
-	FramebufferObject splashFramebuffer;
+	int levelsizeX = 150;
+	int levelsizeZ = 150;
+	int splashResolution = 2048;
+
+	boolean last0 = true;
+	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
 	Box ground;
 
-	Quad groundbackground;
-	Shader textureshader2splash, defaultshader2splash;
+	Shader newSplashShader, splashQuadShader, splashGroundShader;
+	Texture[] splashtextures;
+	PostProcessingShader combinationShader;
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
@@ -91,13 +95,13 @@ public class Game extends StandardGame {
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()),
 				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
 				new SimpleManifoldManager<Vector3f>());
-		space.setGlobalGravitation(new Vector3f(0, 0, 0));
+		space.setGlobalGravitation(new Vector3f(0, -10, 0));
 
-		defaultshader = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert", "res/shaders/defaultshader.frag"));
+		int defaultshaderID = ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert",
+				"res/shaders/defaultshader.frag");
+		defaultshader = new Shader(defaultshaderID);
 		addShader(defaultshader);
-		Shader defaultshaderInterface = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert", "res/shaders/defaultshader.frag"));
+		Shader defaultshaderInterface = new Shader(defaultshaderID);
 		addShaderInterface(defaultshaderInterface);
 
 		int colorshaderprogram = ShaderLoader.loadShaderFromFile("res/shaders/colorshader.vert",
@@ -110,36 +114,45 @@ public class Game extends StandardGame {
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface, font, cam);
 		physicsdebug = new PhysicsDebug(inputs, font, space, defaultshader);
 
-		splashFramebuffer = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+		newSplashFramebuffer = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
 				new Camera2(new Vector2f(0, 0)));
-		groundbackground = new Quad(0, 0, splashResolution / 2f, splashResolution / 2f);
-		groundbackground.setRenderHints(false, true, false);
+		splashFramebuffer0 = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+				new Camera2(new Vector2f(0, 0)));
+		splashFramebuffer1 = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+				new Camera2(new Vector2f(0, 0)));
 
 		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
 				"res/shaders/textureshader.frag");
-		Texture splashTexture = splashFramebuffer.getColorTexture();
-		Texture splashTexture1 = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
 
-		Shader textureshader = new Shader(textureshaderID);
-		textureshader.addArgumentName("u_texture");
-		textureshader.addArgument(splashTexture);
-		addShader(textureshader);
-		Shader textureshader2 = new Shader(textureshaderID);
-		textureshader2.addArgumentName("u_texture");
-		textureshader2.addArgument(splashTexture);
-		addShader2d(textureshader2);
-		textureshader2splash = new Shader(textureshaderID);
-		textureshader2splash.addArgumentName("u_texture");
-		textureshader2splash.addArgument(splashTexture1);
-		addShader2d(textureshader2splash);
-		defaultshader2splash = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert", "res/shaders/defaultshader.frag"));
-		addShader2d(defaultshader2splash);
+		splashGroundShader = new Shader(textureshaderID);
+		splashGroundShader.addArgumentName("u_texture");
+		splashGroundShader.addArgument(splashFramebuffer0.getColorTexture());
+		addShader(splashGroundShader);
+
+		splashtextures = new Texture[2];
+		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
+		splashtextures[1] = new Texture(TextureLoader.loadTexture("res/textures/testGreenSplash.png"));
+
+		newSplashShader = new Shader(
+				ShaderLoader.loadShaderFromFile("res/shaders/splashshader.vert", "res/shaders/splashshader.frag"));
+		newSplashShader.addArgument("u_texture", splashtextures[0]);
+		newSplashShader.addArgument("u_color", new Vector4f(0, 1, 0, 1));
+		addShader2d(newSplashShader);
+
+		Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
+				"res/shaders/combinationshader.frag"));
+		combShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
+		combShader.addArgument("u_depthTexture", splashFramebuffer0.getDepthTexture());
+		combShader.addArgument("u_splashTexture", newSplashFramebuffer.getColorTexture());
+		combinationShader = new PostProcessingShader(combShader, 1);
+		combinationShader.getShader().addObject(screen);
 
 		ground = new Box(levelsizeX / 2f, -2f, levelsizeZ / 2f, levelsizeX / 2f, 1, levelsizeZ / 2f);
 		ground.setRenderHints(false, true, false);
-		textureshader.addObject(ground);
-		textureshader2.addObject(groundbackground);
+		RigidBody3 rbground = new RigidBody3(PhysicsShapeCreator.create(ground));
+		rbground.setMass(0);
+		space.addRigidBody(ground, rbground);
+		splashGroundShader.addObject(ground);
 
 		generateLevel(100);
 
@@ -236,19 +249,10 @@ public class Game extends StandardGame {
 			player.getBody().rotate(0, mouseX * mouseSensitivity, 0);
 			updatePlayerRotationVariables();
 		}
+
+		player.tickShoot(delta);
 		if (eventShoot.isActive()) {
-			/*
-			 * Vector3f spawnposition = new Vector3f(player.getTranslation());
-			 * spawnposition.translate(-playerfront.x, 0, -playerfront.z); int
-			 * shotshaderid = (int) (Math.random() * shotColorShaders.size());
-			 * Shot shot = new Shot(spawnposition, shotgeometry,
-			 * shotcollisionshape, playerfront, shotshaderid);
-			 * space.addRigidBody(shot, shot.getBody());
-			 * space.addCollisionFilter(player.getBody(), shot.getBody());
-			 * shotColorShaders.get(shotshaderid).addObject(shot);
-			 * shots.add(shot);
-			 */
-			player.tickShoot(delta);
+			player.shoot();
 		}
 
 		move.transform(playerrotation);
@@ -277,21 +281,26 @@ public class Game extends StandardGame {
 
 				Shot shot = shots.remove(i);
 
-				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 10f, 10f);
-				// a.setRenderHints(false, true, false);
-				defaultshader2splash.addObject(a); // TODO: replace by
-													// textureshader
+				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 2f, 2f);
+				a.setRenderHints(false, true, false);
+				a.rotate((float) (Math.random() * 360));
+				newSplashShader.addObject(a);
+				newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
+				newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
 
-				splashFramebuffer.updateTexture();
+				newSplashFramebuffer.updateTexture();
 
-				defaultshader2splash.removeObject(a);
+				newSplashShader.removeObject(a);
 				a.delete();
+
+				combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
+				splashFramebuffer1.copyTo(splashFramebuffer0);
+				splashGroundShader.setArgument("u_texture", splashFramebuffer0.getColorTexture());
 
 				shot.getShotShader().removeObject(shot);
 				shot.deleteData();
 				space.removeRigidBody(shot, shot.getBody());
 				space.removeCollisionFilter(player.getBody(), shot.getBody());
-				System.out.println(space.getCollisionFilters().size());
 				i--;
 			}
 		}

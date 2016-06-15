@@ -37,9 +37,14 @@ public class Ship extends Box {
 	}
 
 	public void tickShoot(int delta) {
-		shipfront = QuatMath.transform(this.getRotation(), front);
 		for (Cannon cannon : cannons)
 			cannon.tickShoot(delta);
+	}
+
+	public void shoot() {
+		shipfront = QuatMath.transform(this.getRotation(), front);
+		for (Cannon cannon : cannons)
+			cannon.shoot();
 	}
 
 	public Vector3f getShipFront() {

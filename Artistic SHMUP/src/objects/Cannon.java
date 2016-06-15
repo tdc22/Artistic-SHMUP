@@ -15,4 +15,6 @@ public abstract class Cannon {
 	}
 
 	public abstract void tickShoot(int delta);
+
+	public abstract void shoot();
 }
