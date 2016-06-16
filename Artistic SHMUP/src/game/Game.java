@@ -66,15 +66,15 @@ public class Game extends StandardGame {
 	final Vector3f cameraOffset = new Vector3f(0, 10, 10);
 	Vector3f transformedCameraOffset = new Vector3f();
 
-	int levelsizeX = 150;
-	int levelsizeZ = 150;
-	int splashResolution = 2048;
+	final int levelsizeX = 150;
+	final int levelsizeZ = 150;
+	final int splashResolution = 2048;
 
 	boolean last0 = true;
 	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
 	Box ground;
 
-	Shader newSplashShader, splashQuadShader, splashGroundShader;
+	Shader newSplashShader, splashQuadShader, splashGroundShader, levelObjectShader;
 	Texture[] splashtextures;
 	PostProcessingShader combinationShader;
 
@@ -125,9 +125,15 @@ public class Game extends StandardGame {
 				"res/shaders/textureshader.frag");
 
 		splashGroundShader = new Shader(textureshaderID);
-		splashGroundShader.addArgumentName("u_texture");
-		splashGroundShader.addArgument(splashFramebuffer0.getColorTexture());
+		splashGroundShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
 		addShader(splashGroundShader);
+
+		levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/levelobjectshader.vert",
+				"res/shaders/levelobjectshader.frag"));
+		levelObjectShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
+		levelObjectShader.addArgument("u_levelsizeX", levelsizeX);
+		levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
+		addShader(levelObjectShader);
 
 		splashtextures = new Texture[2];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
@@ -147,14 +153,16 @@ public class Game extends StandardGame {
 		combinationShader = new PostProcessingShader(combShader, 1);
 		combinationShader.getShader().addObject(screen);
 
-		ground = new Box(levelsizeX / 2f, -2f, levelsizeZ / 2f, levelsizeX / 2f, 1, levelsizeZ / 2f);
+		float halflevelsizeX = levelsizeX / 2f;
+		float halflevelsizeZ = levelsizeZ / 2f;
+		ground = new Box(halflevelsizeX, -2f, halflevelsizeZ, halflevelsizeX, 1, halflevelsizeZ);
 		ground.setRenderHints(false, true, false);
 		RigidBody3 rbground = new RigidBody3(PhysicsShapeCreator.create(ground));
 		rbground.setMass(0);
 		space.addRigidBody(ground, rbground);
 		splashGroundShader.addObject(ground);
 
-		generateLevel(100);
+		generateLevel(150);
 
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
@@ -171,28 +179,44 @@ public class Game extends StandardGame {
 			addShader(s);
 		}
 
-		player = new Player(0, 0, 0);
+		player = new Player(halflevelsizeX, 0, halflevelsizeZ);
 		space.addRigidBody(player, player.getBody());
 		bluecolorshader.addObject(player);
 
-		StandardCannon cannon = new StandardCannon(this, space, player, new Vector3f(0, 0, -1), shotColorShaders.get(0),
-				shotgeometry, shotcollisionshape);
-		player.addCannon(cannon);
+		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
+				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
+		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0.8f, 0, -1),
+				new Vector3f(-0.4472136, 0, 0.8944272), shotColorShaders.get(1), shotgeometry, shotcollisionshape));
+		player.addCannon(new StandardCannon(this, space, player, new Vector3f(-0.8f, 0, -1),
+				new Vector3f(0.4472136, 0, 0.8944272), shotColorShaders.get(2), shotgeometry, shotcollisionshape));
 
 		setupInputs();
 		updatePlayerRotationVariables();
+
+		Quad a = new Quad(halflevelsizeX, halflevelsizeZ, halflevelsizeX, halflevelsizeZ);
+		a.setRenderHints(false, true, false);
+		newSplashShader.addObject(a);
+		newSplashShader.setArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/whitePixel.png")));
+		newSplashShader.setArgument("u_color", new Vector4f(1, 1, 1, 1));
+		splashFramebuffer0.updateTexture();
+		newSplashShader.removeObject(a);
+		a.delete();
 	}
 
 	private void addStaticBox(float x, float y, float z, float width, float height, float depth) {
 		Box box = new Box(x, y, z, width, height, depth);
+		box.setRenderHints(false, false, false);
 		RigidBody3 rb = new RigidBody3(PhysicsShapeCreator.create(box));
 		space.addRigidBody(box, rb);
-		defaultshader.addObject(box);
+		levelObjectShader.addObject(box);
 	}
 
 	public void generateLevel(int numboxes) {
 		for (int i = 0; i < numboxes; i++) {
-			addStaticBox((int) (Math.random() * levelsizeX), 0, (int) (Math.random() * levelsizeZ), 1, 1, 1);
+			int sizeX = 1;
+			int sizeZ = 1;
+			addStaticBox((int) (sizeX + (Math.random() * (levelsizeX - 2 * sizeX))), 0,
+					(int) (sizeZ + (Math.random() * (levelsizeZ - 2 * sizeZ))), sizeX, 1, sizeZ);
 		}
 
 		boolean[][] testarray = { { false, false, false, false, false }, { false, false, true, false, false },
@@ -276,10 +300,9 @@ public class Game extends StandardGame {
 		physicsdebug.update();
 
 		for (int i = 0; i < shots.size(); i++) {
-			if (space.hasCollision(shots.get(i).getBody())) {
+			Shot shot = shots.get(i);
+			if (space.hasCollision(shot.getBody())) {
 				System.out.println("Hit!");
-
-				Shot shot = shots.remove(i);
 
 				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 2f, 2f);
 				a.setRenderHints(false, true, false);
@@ -288,6 +311,9 @@ public class Game extends StandardGame {
 				newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
 				newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
 
+				shots.remove(i);
+				deleteShot(shot);
+
 				newSplashFramebuffer.updateTexture();
 
 				newSplashShader.removeObject(a);
@@ -295,15 +321,16 @@ public class Game extends StandardGame {
 
 				combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
 				splashFramebuffer1.copyTo(splashFramebuffer0);
-				splashGroundShader.setArgument("u_texture", splashFramebuffer0.getColorTexture());
 
-				shot.getShotShader().removeObject(shot);
-				shot.deleteData();
-				space.removeRigidBody(shot, shot.getBody());
-				space.removeCollisionFilter(player.getBody(), shot.getBody());
 				i--;
+			} else {
+				if (shot.getTranslation().y < -20) {
+					shots.remove(i);
+					deleteShot(shot);
+				}
 			}
 		}
+		System.out.println(space.getObjects().size());
 		// System.out.println(space.hasOverlap(testrb) + "; " +
 		// space.hasCollision(testrb) + "; " + testrb.getTranslation() + "; " +
 		// testrb.getRotation());
@@ -312,6 +339,13 @@ public class Game extends StandardGame {
 		cam.translate(transformedCameraOffset);
 		cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
 		cam.update(delta);
+	}
+
+	private void deleteShot(Shot shot) {
+		shot.getShotShader().removeObject(shot);
+		shot.deleteData();
+		space.removeRigidBody(shot, shot.getBody());
+		space.removeCollisionFilter(player.getBody(), shot.getBody());
 	}
 
 	public void addShot(Shot shot) {

@@ -10,7 +10,7 @@ public class Shot extends ShapedObject3 {
 	Shader shotshader;
 
 	public Shot(Vector3f spawnposition, ShapedObject3 shotgeometry, CollisionShape3 shotcollisionshape,
-			Vector3f playerfront, Shader shotshader) {
+			Vector3f shotdirection, Shader shotshader) {
 		super(spawnposition);
 		this.shotshader = shotshader;
 		setVAOHandle(shotgeometry.getVAOHandle());
@@ -22,7 +22,7 @@ public class Shot extends ShapedObject3 {
 		body.setMass(1);
 		body.setInertia(new Quaternionf());
 		body.setLinearFactor(new Vector3f(1, 1, 1));
-		body.applyCentralImpulse(VecMath.scale(playerfront, -100));
+		body.applyCentralImpulse(VecMath.scale(shotdirection, -100));
 	}
 
 	public RigidBody3 getBody() {
