@@ -66,8 +66,8 @@ public class Game extends StandardGame {
 	final Vector3f cameraOffset = new Vector3f(0, 10, 10);
 	Vector3f transformedCameraOffset = new Vector3f();
 
-	final int levelsizeX = 150;
-	final int levelsizeZ = 150;
+	final int levelsizeX = 160; // mod 2 = 0 !!!
+	final int levelsizeZ = 160;
 	final int splashResolution = 2048;
 
 	boolean last0 = true;
@@ -106,9 +106,9 @@ public class Game extends StandardGame {
 
 		int colorshaderprogram = ShaderLoader.loadShaderFromFile("res/shaders/colorshader.vert",
 				"res/shaders/colorshader.frag");
-		Shader bluecolorshader = new Shader(colorshaderprogram);
-		bluecolorshader.addArgument("u_color", new Vector4f(0, 0, 1, 1));
-		addShader(bluecolorshader);
+		Shader playercolorshader = new Shader(colorshaderprogram);
+		playercolorshader.addArgument("u_color", new Vector4f(0.75, 0.75, 0.75, 1));
+		addShader(playercolorshader);
 
 		Font font = FontLoader.loadFont("res/fonts/DejaVuSans.ttf");
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface, font, cam);
@@ -162,7 +162,12 @@ public class Game extends StandardGame {
 		space.addRigidBody(ground, rbground);
 		splashGroundShader.addObject(ground);
 
-		generateLevel(150);
+		addStaticBox(halflevelsizeX, 0, 0.5f, halflevelsizeX, 1, 0.5f);
+		addStaticBox(halflevelsizeX, 0, levelsizeZ - 0.5f, halflevelsizeX, 1, 0.5f);
+		addStaticBox(0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
+		addStaticBox(levelsizeX - 0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
+
+		generateLevel(200);
 
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
@@ -181,7 +186,7 @@ public class Game extends StandardGame {
 
 		player = new Player(halflevelsizeX, 0, halflevelsizeZ);
 		space.addRigidBody(player, player.getBody());
-		bluecolorshader.addObject(player);
+		playercolorshader.addObject(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
@@ -212,11 +217,34 @@ public class Game extends StandardGame {
 	}
 
 	public void generateLevel(int numboxes) {
+		int gridsizeX = levelsizeX / 2 - 1;
+		int gridsizeZ = levelsizeZ / 2 - 1;
+		boolean[][] levelgrid = new boolean[gridsizeX][gridsizeZ];
+
+		for (int x = 0; x < gridsizeX; x++) {
+			for (int z = 0; z < gridsizeZ; z++) {
+				levelgrid[x][z] = false;
+			}
+		}
+
 		for (int i = 0; i < numboxes; i++) {
-			int sizeX = 1;
-			int sizeZ = 1;
-			addStaticBox((int) (sizeX + (Math.random() * (levelsizeX - 2 * sizeX))), 0,
-					(int) (sizeZ + (Math.random() * (levelsizeZ - 2 * sizeZ))), sizeX, 1, sizeZ);
+			int posX = (int) (Math.random() * gridsizeX);
+			int posZ = (int) (Math.random() * gridsizeZ);
+			if (!levelgrid[posX][posZ]) {
+				levelgrid[posX][posZ] = true;
+			} else {
+				i--;
+			}
+		}
+
+		int sizeX = 1;
+		int sizeZ = 1;
+		for (int x = 0; x < gridsizeX; x++) {
+			for (int z = 0; z < gridsizeZ; z++) {
+				if (levelgrid[x][z]) {
+					addStaticBox(x * 2 + 2, 0, z * 2 + 2, sizeX, 1, sizeZ);
+				}
+			}
 		}
 
 		boolean[][] testarray = { { false, false, false, false, false }, { false, false, true, false, false },
