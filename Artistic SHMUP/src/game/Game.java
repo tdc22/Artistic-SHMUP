@@ -25,8 +25,10 @@ import objects.CollisionShape3;
 import objects.Player;
 import objects.RigidBody3;
 import objects.ShapedObject3;
+import objects.Shootable;
 import objects.Shot;
 import objects.StandardCannon;
+import objects.Tower;
 import physics.PhysicsDebug;
 import physics.PhysicsShapeCreator;
 import physics.PhysicsSpace;
@@ -80,6 +82,7 @@ public class Game extends StandardGame {
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
+	List<Shootable> shooters;
 	List<Shot> shots;
 	List<Shader> shotColorShaders;
 
@@ -167,8 +170,7 @@ public class Game extends StandardGame {
 		addStaticBox(0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
 		addStaticBox(levelsizeX - 0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
 
-		generateLevel(200);
-
+		shooters = new ArrayList<Shootable>();
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
@@ -184,9 +186,12 @@ public class Game extends StandardGame {
 			addShader(s);
 		}
 
+		generateLevel(200, 3);
+
 		player = new Player(halflevelsizeX, 0, halflevelsizeZ);
 		space.addRigidBody(player, player.getBody());
 		playercolorshader.addObject(player);
+		shooters.add(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
@@ -216,7 +221,17 @@ public class Game extends StandardGame {
 		levelObjectShader.addObject(box);
 	}
 
-	public void generateLevel(int numboxes) {
+	private void addTower(float x, float y, float z) {
+		Tower tower = new Tower(x, y, z);
+		space.addRigidBody(tower, tower.getBody());
+		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
+				shotColorShaders.get((int) (Math.random() * shotColorShaders.size())), shotgeometry,
+				shotcollisionshape));
+		defaultshader.addObject(tower);
+		shooters.add(tower);
+	}
+
+	public void generateLevel(int numboxes, int numtowers) {
 		int gridsizeX = levelsizeX / 2 - 1;
 		int gridsizeZ = levelsizeZ / 2 - 1;
 		boolean[][] levelgrid = new boolean[gridsizeX][gridsizeZ];
@@ -226,24 +241,28 @@ public class Game extends StandardGame {
 				levelgrid[x][z] = false;
 			}
 		}
+		levelgrid[gridsizeX / 2][gridsizeZ / 2] = true; // player
 
+		int sizeX = 1;
+		int sizeZ = 1;
 		for (int i = 0; i < numboxes; i++) {
 			int posX = (int) (Math.random() * gridsizeX);
 			int posZ = (int) (Math.random() * gridsizeZ);
 			if (!levelgrid[posX][posZ]) {
 				levelgrid[posX][posZ] = true;
+				addStaticBox(posX * 2 + 2, 0, posZ * 2 + 2, sizeX, 1, sizeZ);
 			} else {
 				i--;
 			}
 		}
-
-		int sizeX = 1;
-		int sizeZ = 1;
-		for (int x = 0; x < gridsizeX; x++) {
-			for (int z = 0; z < gridsizeZ; z++) {
-				if (levelgrid[x][z]) {
-					addStaticBox(x * 2 + 2, 0, z * 2 + 2, sizeX, 1, sizeZ);
-				}
+		for (int i = 0; i < numtowers; i++) {
+			int posX = (int) (Math.random() * gridsizeX);
+			int posZ = (int) (Math.random() * gridsizeZ);
+			if (!levelgrid[posX][posZ]) {
+				levelgrid[posX][posZ] = true;
+				addTower(posX * 2 + 2, 0, posZ * 2 + 2);
+			} else {
+				i--;
 			}
 		}
 
@@ -302,9 +321,12 @@ public class Game extends StandardGame {
 			updatePlayerRotationVariables();
 		}
 
-		player.tickShoot(delta);
-		if (eventShoot.isActive()) {
-			player.shoot();
+		player.setShooting(eventShoot.isActive());
+		for (Shootable shooter : shooters) {
+			shooter.tickShoot(delta);
+			if (shooter.isShooting()) {
+				shooter.shoot();
+			}
 		}
 
 		move.transform(playerrotation);
@@ -329,7 +351,7 @@ public class Game extends StandardGame {
 
 		for (int i = 0; i < shots.size(); i++) {
 			Shot shot = shots.get(i);
-			if (space.hasCollision(shot.getBody())) {
+			if (space.hasCollisionNoGhosts(shot.getBody())) {
 				System.out.println("Hit!");
 
 				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 2f, 2f);

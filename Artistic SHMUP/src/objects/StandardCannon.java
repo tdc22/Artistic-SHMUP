@@ -11,13 +11,13 @@ public class StandardCannon extends Cannon {
 	ShapedObject3 shotgeometry;
 	CollisionShape3 shotcollisionshape;
 	int lastshot;
-	final int minTimeBetweenShoot = 100;
+	final int minTimeBetweenShoot = 150;
 	boolean canShoot = true;
 
-	public StandardCannon(Game game, PhysicsSpace space, Ship ship, Vector3f relativetranslation,
+	public StandardCannon(Game game, PhysicsSpace space, Shootable shooter, Vector3f relativetranslation,
 			Vector3f relativedirection, Shader shotshader, ShapedObject3 shotgeometry,
 			CollisionShape3 shotcollisionshape) {
-		super(space, ship, relativetranslation, relativedirection);
+		super(space, shooter, relativetranslation, relativedirection);
 		this.game = game;
 		this.shotshader = shotshader;
 		this.shotgeometry = shotgeometry;
@@ -39,13 +39,13 @@ public class StandardCannon extends Cannon {
 	public void shoot() {
 		if (canShoot) {
 			Vector3f spawnposition = new Vector3f(relativetranslation);
-			spawnposition.transform(ship.getRotation());
-			spawnposition.translate(ship.getTranslation());
+			spawnposition.transform(shooter.getRotation());
+			spawnposition.translate(shooter.getTranslation());
 			Vector3f initialdirection = new Vector3f(relativedirection);
-			initialdirection.transform(ship.getRotation());
+			initialdirection.transform(shooter.getRotation());
 			Shot shot = new Shot(spawnposition, shotgeometry, shotcollisionshape, initialdirection, shotshader);
 			space.addRigidBody(shot, shot.getBody());
-			space.addCollisionFilter(ship.getBody(), shot.getBody());
+			space.addCollisionFilter(shooter.getBody(), shot.getBody());
 			shotshader.addObject(shot);
 			game.addShot(shot);
 

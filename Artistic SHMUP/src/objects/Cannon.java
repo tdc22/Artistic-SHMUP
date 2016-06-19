@@ -5,12 +5,12 @@ import vector.Vector3f;
 
 public abstract class Cannon {
 	PhysicsSpace space;
-	Ship ship;
+	Shootable shooter;
 	Vector3f relativetranslation, relativedirection;
 
-	public Cannon(PhysicsSpace space, Ship ship, Vector3f relativetranslation, Vector3f relativedirection) {
+	public Cannon(PhysicsSpace space, Shootable shooter, Vector3f relativetranslation, Vector3f relativedirection) {
 		this.space = space;
-		this.ship = ship;
+		this.shooter = shooter;
 		this.relativetranslation = relativetranslation;
 		this.relativedirection = relativedirection;
 	}
