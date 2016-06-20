@@ -43,7 +43,8 @@ public class StandardCannon extends Cannon {
 			spawnposition.translate(shooter.getTranslation());
 			Vector3f initialdirection = new Vector3f(relativedirection);
 			initialdirection.transform(shooter.getRotation());
-			Shot shot = new Shot(spawnposition, shotgeometry, shotcollisionshape, initialdirection, shotshader);
+			Shot shot = new Shot(spawnposition, shotgeometry, shotcollisionshape, initialdirection, shotshader,
+					shooter.getBody());
 			space.addRigidBody(shot, shot.getBody());
 			space.addCollisionFilter(shooter.getBody(), shot.getBody());
 			shotshader.addObject(shot);

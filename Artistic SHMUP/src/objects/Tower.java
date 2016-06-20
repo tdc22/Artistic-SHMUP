@@ -4,27 +4,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 import math.QuatMath;
+import math.VecMath;
 import physics.PhysicsShapeCreator;
 import quaternion.Quaternionf;
+import shader.Shader;
 import shape.Cylinder;
 import vector.Vector3f;
 
-public class Tower extends Cylinder implements Shootable, Damageable {
+public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 	RigidBody3 body;
 	boolean isShooting = true;
 	List<Cannon> cannons;
 	Vector3f towerfront;
 	int health;
+	Shader shader;
+	final Vector3f up = new Vector3f(0, 1, 0);
 
-	public Tower(float x, float y, float z) {
+	public Tower(float x, float y, float z, Shader shader) {
 		super(x, y, z, 1, 1, 36);
 		body = new RigidBody3(PhysicsShapeCreator.create(this));
-		body.setMass(0);
+		body.setMass(1);
 		body.setInertia(new Quaternionf());
 		body.setRestitution(0);
 		body.setLinearFactor(new Vector3f(0, 0, 0));
-		body.setAngularFactor(new Vector3f(0, 0, 0));
+		body.setAngularFactor(new Vector3f(0, 1, 0));
 
+		towerfront = QuatMath.transform(this.getRotation(), front);
+		this.shader = shader;
+		health = 100;
 		cannons = new ArrayList<Cannon>();
 	}
 
@@ -34,6 +41,13 @@ public class Tower extends Cylinder implements Shootable, Damageable {
 
 	public void setShooting(boolean shooting) {
 		isShooting = shooting;
+	}
+
+	public void update(int delta, Player player) {
+		Vector3f tp = VecMath.subtraction(player.getTranslation(), getTranslation());
+		tp.normalize();
+		Vector3f side = VecMath.crossproduct(towerfront, up);
+		body.applyTorqueImpulse(new Vector3f(0, VecMath.dotproduct(side, tp), 0));
 	}
 
 	public void tickShoot(int delta) {
@@ -69,6 +83,21 @@ public class Tower extends Cylinder implements Shootable, Damageable {
 	@Override
 	public void damage(int damage) {
 		health -= damage;
+	}
+
+	@Override
+	public Shootable getShooter() {
+		return this;
+	}
+
+	@Override
+	public Shader getShader() {
+		return shader;
+	}
+
+	@Override
+	public ShapedObject3 getShapedObject() {
+		return this;
 	}
 
 }

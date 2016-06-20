@@ -6,13 +6,14 @@ import shader.Shader;
 import vector.Vector3f;
 
 public class Shot extends ShapedObject3 {
-	RigidBody3 body;
+	RigidBody3 body, owner;
 	Shader shotshader;
 
 	public Shot(Vector3f spawnposition, ShapedObject3 shotgeometry, CollisionShape3 shotcollisionshape,
-			Vector3f shotdirection, Shader shotshader) {
+			Vector3f shotdirection, Shader shotshader, RigidBody3 owner) {
 		super(spawnposition);
 		this.shotshader = shotshader;
+		this.owner = owner;
 		setVAOHandle(shotgeometry.getVAOHandle());
 		setVBOColorHandle(shotgeometry.getVBOColorHandle());
 		setVBOIndexHandle(shotgeometry.getVBOIndexHandle());
@@ -27,6 +28,10 @@ public class Shot extends ShapedObject3 {
 
 	public RigidBody3 getBody() {
 		return body;
+	}
+
+	public RigidBody3 getOwner() {
+		return owner;
 	}
 
 	public Shader getShotShader() {

@@ -6,6 +6,7 @@ import java.util.List;
 import math.QuatMath;
 import physics.PhysicsShapeCreator;
 import quaternion.Quaternionf;
+import shader.Shader;
 import shape.Box;
 import vector.Vector3f;
 
@@ -15,8 +16,9 @@ public class Ship extends Box implements Shootable, Damageable {
 	boolean isShooting = false;
 	Vector3f shipfront;
 	int health;
+	Shader shader;
 
-	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ) {
+	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ, Shader shader) {
 		super(x, y, z, halfsizeX, halfsizeY, halfsizeZ);
 		body = new RigidBody3(PhysicsShapeCreator.create(this));
 		body.setMass(1);
@@ -25,6 +27,8 @@ public class Ship extends Box implements Shootable, Damageable {
 		body.setLinearFactor(new Vector3f(1, 0, 1));
 		body.setAngularFactor(new Vector3f(0, 0, 0));
 
+		this.shader = shader;
+		health = 100;
 		cannons = new ArrayList<Cannon>();
 	}
 
@@ -72,5 +76,20 @@ public class Ship extends Box implements Shootable, Damageable {
 	@Override
 	public void damage(int damage) {
 		health -= damage;
+	}
+
+	@Override
+	public Shootable getShooter() {
+		return this;
+	}
+
+	@Override
+	public Shader getShader() {
+		return shader;
+	}
+
+	@Override
+	public ShapedObject3 getShapedObject() {
+		return this;
 	}
 }

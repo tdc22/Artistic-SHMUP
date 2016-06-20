@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import broadphase.SAP;
+import curves.BezierCurve3;
+import curves.SquadCurve3;
 import display.DisplayMode;
 import display.GLDisplay;
 import display.PixelFormat;
@@ -17,12 +19,16 @@ import integration.VerletIntegration;
 import loader.FontLoader;
 import loader.ShaderLoader;
 import loader.TextureLoader;
+import manifold.CollisionManifold;
 import manifold.SimpleManifoldManager;
 import narrowphase.EPA;
 import narrowphase.GJK;
 import objects.Camera2;
 import objects.CollisionShape3;
+import objects.Damageable;
+import objects.Enemy;
 import objects.Player;
+import objects.RigidBody;
 import objects.RigidBody3;
 import objects.ShapedObject3;
 import objects.Shootable;
@@ -34,6 +40,7 @@ import physics.PhysicsShapeCreator;
 import physics.PhysicsSpace;
 import positionalcorrection.ProjectionCorrection;
 import quaternion.Complexf;
+import quaternion.Quaternionf;
 import resolution.SimpleLinearImpulseResolution;
 import shader.PostProcessingShader;
 import shader.Shader;
@@ -76,13 +83,27 @@ public class Game extends StandardGame {
 	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
 	Box ground;
 
-	Shader newSplashShader, splashQuadShader, splashGroundShader, levelObjectShader;
+	final int healthbarHalfSizeX = 100;
+	final int healthbarHalfSizeY = 10;
+	final int healthbarMargin = 10;
+	final int healthbarBorder = 1;
+	
+	boolean playerAlive = true;
+	float deathtimer = 0;
+
+	Shader newSplashShader, splashQuadShader, splashGroundShader, levelObjectShader, blackcolorshader;
 	Texture[] splashtextures;
 	PostProcessingShader combinationShader;
+
+	Quad healthbar;
+	BezierCurve3 deathcamCurve;
+	SquadCurve3 deathcamRotationCurve;
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
 	List<Shootable> shooters;
+	List<Damageable> targets;
+	List<Enemy> enemies;
 	List<Shot> shots;
 	List<Shader> shotColorShaders;
 
@@ -112,6 +133,12 @@ public class Game extends StandardGame {
 		Shader playercolorshader = new Shader(colorshaderprogram);
 		playercolorshader.addArgument("u_color", new Vector4f(0.75, 0.75, 0.75, 1));
 		addShader(playercolorshader);
+		blackcolorshader = new Shader(colorshaderprogram);
+		blackcolorshader.addArgument("u_color", new Vector4f(0, 0, 0, 1));
+		addShader(blackcolorshader);
+		Shader redcolorshaderInterface = new Shader(colorshaderprogram);
+		redcolorshaderInterface.addArgument("u_color", new Vector4f(1, 0, 0, 1));
+		addShaderInterface(redcolorshaderInterface);
 
 		Font font = FontLoader.loadFont("res/fonts/DejaVuSans.ttf");
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface, font, cam);
@@ -156,6 +183,14 @@ public class Game extends StandardGame {
 		combinationShader = new PostProcessingShader(combShader, 1);
 		combinationShader.getShader().addObject(screen);
 
+		Quad healthbarBackground = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
+				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarBorder + healthbarHalfSizeX,
+				healthbarBorder + healthbarHalfSizeY);
+		defaultshaderInterface.addObject(healthbarBackground);
+		healthbar = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
+				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarHalfSizeX, healthbarHalfSizeY);
+		redcolorshaderInterface.addObject(healthbar);
+
 		float halflevelsizeX = levelsizeX / 2f;
 		float halflevelsizeZ = levelsizeZ / 2f;
 		ground = new Box(halflevelsizeX, -2f, halflevelsizeZ, halflevelsizeX, 1, halflevelsizeZ);
@@ -171,6 +206,8 @@ public class Game extends StandardGame {
 		addStaticBox(levelsizeX - 0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
 
 		shooters = new ArrayList<Shootable>();
+		targets = new ArrayList<Damageable>();
+		enemies = new ArrayList<Enemy>();
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
@@ -186,12 +223,13 @@ public class Game extends StandardGame {
 			addShader(s);
 		}
 
-		generateLevel(200, 3);
+		generateLevel(100, 10);
 
-		player = new Player(halflevelsizeX, 0, halflevelsizeZ);
+		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader);
 		space.addRigidBody(player, player.getBody());
 		playercolorshader.addObject(player);
 		shooters.add(player);
+		targets.add(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
@@ -222,13 +260,15 @@ public class Game extends StandardGame {
 	}
 
 	private void addTower(float x, float y, float z) {
-		Tower tower = new Tower(x, y, z);
+		Tower tower = new Tower(x, y, z, blackcolorshader);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get((int) (Math.random() * shotColorShaders.size())), shotgeometry,
 				shotcollisionshape));
-		defaultshader.addObject(tower);
+		blackcolorshader.addObject(tower);
 		shooters.add(tower);
+		targets.add(tower);
+		enemies.add(tower);
 	}
 
 	public void generateLevel(int numboxes, int numtowers) {
@@ -343,16 +383,53 @@ public class Game extends StandardGame {
 		if (player.getBody().getLinearVelocity().lengthSquared() > player.getMaxSpeedSquared()) {
 			player.getBody().getLinearVelocity().setLength(player.getMaxSpeed());
 		}
-		// player.getBody().setLinearVelocity(move.x,
-		// player.getBody().getLinearVelocity().y, move.y);
+
+		for (Enemy enemy : enemies) {
+			enemy.update(delta, player);
+		}
 
 		space.update(delta);
 		physicsdebug.update();
 
 		for (int i = 0; i < shots.size(); i++) {
 			Shot shot = shots.get(i);
-			if (space.hasCollisionNoGhosts(shot.getBody())) {
-				System.out.println("Hit!");
+			CollisionManifold<Vector3f> manifold = space.getFirstCollisionManifold(shot.getBody());
+			if (manifold != null) {
+				RigidBody<Vector3f, ?, ?, ?> other = (manifold.getObjects().getFirst().equals(shot.getBody()))
+						? manifold.getObjects().getSecond() : manifold.getObjects().getFirst();
+				Damageable damaged = null;
+				for (Damageable dmg : targets) {
+					if (other.equals(dmg.getBody())) {
+						damaged = dmg;
+						break;
+					}
+				}
+				if (damaged != null) {
+					int damage = 10;
+					damaged.damage(damage);
+					if (damaged.getBody().equals(player.getBody())) {
+						healthbar.scaleTo(damaged.getHealth() / 100f, 1);
+						healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
+						if(damaged.getHealth() <= 0) {
+							int halfLevelSizeX = levelsizeX/2;
+							int halfLevelSizeZ = levelsizeZ/2;
+							deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(),
+									cam.getTranslation(), new Vector3f(halfLevelSizeX, 30, halfLevelSizeZ));
+							Quaternionf lookdown = new Quaternionf();
+							lookdown.rotate(90, new Vector3f(1, 0, 0));
+							deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), cam.getRotation(), cam.getRotation());
+							playerAlive = false;
+						}
+					}
+					System.out.println(damaged.getHealth());
+					if (damaged.getHealth() <= 0) {
+						targets.remove(damaged);
+						shooters.remove(damaged.getShooter());
+						space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
+						damaged.getShader().removeObject(damaged.getShapedObject());
+						damaged.getShapedObject().delete();
+					}
+				}
 
 				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 2f, 2f);
 				a.setRenderHints(false, true, false);
@@ -380,22 +457,29 @@ public class Game extends StandardGame {
 				}
 			}
 		}
-		System.out.println(space.getObjects().size());
-		// System.out.println(space.hasOverlap(testrb) + "; " +
-		// space.hasCollision(testrb) + "; " + testrb.getTranslation() + "; " +
-		// testrb.getRotation());
+		
 
-		cam.translateTo(player.getTranslation());
-		cam.translate(transformedCameraOffset);
-		cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
-		cam.update(delta);
+		if(playerAlive) {
+			cam.translateTo(player.getTranslation());
+			cam.translate(transformedCameraOffset);
+			cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
+		}
+		else {
+			if(deathtimer < 1)
+				deathtimer += delta * 0.0001;
+			else
+				deathtimer = 1;
+			System.out.println(deathtimer);
+			cam.translateTo(deathcamCurve.getPoint(deathtimer));
+			cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
+		}
 	}
 
 	private void deleteShot(Shot shot) {
 		shot.getShotShader().removeObject(shot);
 		shot.deleteData();
 		space.removeRigidBody(shot, shot.getBody());
-		space.removeCollisionFilter(player.getBody(), shot.getBody());
+		space.removeCollisionFilter(shot.getOwner(), shot.getBody());
 	}
 
 	public void addShot(Shot shot) {
