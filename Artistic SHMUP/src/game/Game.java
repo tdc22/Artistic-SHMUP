@@ -87,7 +87,7 @@ public class Game extends StandardGame {
 	final int healthbarHalfSizeY = 10;
 	final int healthbarMargin = 10;
 	final int healthbarBorder = 1;
-	
+
 	boolean playerAlive = true;
 	float deathtimer = 0;
 
@@ -158,6 +158,10 @@ public class Game extends StandardGame {
 		splashGroundShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
 		addShader(splashGroundShader);
 
+		Shader frameShader = new Shader(textureshaderID);
+		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood1.png")));
+		addShader(frameShader);
+
 		levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/levelobjectshader.vert",
 				"res/shaders/levelobjectshader.frag"));
 		levelObjectShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
@@ -204,6 +208,21 @@ public class Game extends StandardGame {
 		addStaticBox(halflevelsizeX, 0, levelsizeZ - 0.5f, halflevelsizeX, 1, 0.5f);
 		addStaticBox(0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
 		addStaticBox(levelsizeX - 0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
+
+		Box frame1 = new Box(halflevelsizeX, 0, -3, halflevelsizeX + 6, 1, 3);
+		Box frame2 = new Box(halflevelsizeX, 0, levelsizeZ + 3, halflevelsizeX + 6, 1, 3);
+		Box frame3 = new Box(-3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
+		Box frame4 = new Box(levelsizeX + 3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
+		frame3.rotate(0, 90, 0);
+		frame4.rotate(0, 90, 0);
+		frame1.setRenderHints(false, true, false);
+		frame2.setRenderHints(false, true, false);
+		frame3.setRenderHints(false, true, false);
+		frame4.setRenderHints(false, true, false);
+		frameShader.addObject(frame1);
+		frameShader.addObject(frame2);
+		frameShader.addObject(frame3);
+		frameShader.addObject(frame4);
 
 		shooters = new ArrayList<Shootable>();
 		targets = new ArrayList<Damageable>();
@@ -410,14 +429,18 @@ public class Game extends StandardGame {
 					if (damaged.getBody().equals(player.getBody())) {
 						healthbar.scaleTo(damaged.getHealth() / 100f, 1);
 						healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
-						if(damaged.getHealth() <= 0) {
-							int halfLevelSizeX = levelsizeX/2;
-							int halfLevelSizeZ = levelsizeZ/2;
-							deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(),
-									cam.getTranslation(), new Vector3f(halfLevelSizeX, 30, halfLevelSizeZ));
+						if (damaged.getHealth() <= 0) {
+							int halfLevelSizeX = levelsizeX / 2;
+							int halfLevelSizeZ = levelsizeZ / 2;
+							Vector3f b = new Vector3f(cam.getTranslation());
+							b.scale(0.4f);
+							Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
+							Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
+							deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
 							Quaternionf lookdown = new Quaternionf();
-							lookdown.rotate(90, new Vector3f(1, 0, 0));
-							deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), cam.getRotation(), cam.getRotation());
+							lookdown.rotate(-90, new Vector3f(1, 0, 0));
+							deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
+									lookdown);
 							playerAlive = false;
 						}
 					}
@@ -457,19 +480,16 @@ public class Game extends StandardGame {
 				}
 			}
 		}
-		
 
-		if(playerAlive) {
+		if (playerAlive) {
 			cam.translateTo(player.getTranslation());
 			cam.translate(transformedCameraOffset);
 			cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
-		}
-		else {
-			if(deathtimer < 1)
-				deathtimer += delta * 0.0001;
+		} else {
+			if (deathtimer < 1)
+				deathtimer += delta * 0.0002;
 			else
 				deathtimer = 1;
-			System.out.println(deathtimer);
 			cam.translateTo(deathcamCurve.getPoint(deathtimer));
 			cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
 		}
