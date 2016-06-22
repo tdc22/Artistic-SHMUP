@@ -60,11 +60,12 @@ import vector.Vector4f;
 public class Game extends StandardGame {
 	Debugger debugger;
 	PhysicsDebug physicsdebug;
-	InputEvent eventUp, eventDown, eventLeft, eventRight, eventShoot;
+	InputEvent eventEsc, eventUp, eventDown, eventLeft, eventRight, eventShoot;
 	PhysicsSpace space;
 	Player player;
 	Shader defaultshader;
 	RigidBody3 testrb;
+	boolean isPaused = false;
 
 	final float mouseSensitivity = -0.1f; // negative sensitivity = not inverted
 
@@ -77,7 +78,8 @@ public class Game extends StandardGame {
 
 	final int levelsizeX = 160; // mod 2 = 0 !!!
 	final int levelsizeZ = 160;
-	final int splashResolution = 2048;
+	final int splashResolution = 2048; // power of 2 !!!
+	final int splashSubdivision = 2;
 
 	boolean last0 = true;
 	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
@@ -109,8 +111,8 @@ public class Game extends StandardGame {
 
 	@Override
 	public void init() {
-		initDisplay(new GLDisplay(), new DisplayMode(800, 600, "Artful SHMUP", false), new PixelFormat(),
-				new VideoSettings(), new NullSoundEnvironment());
+		initDisplay(new GLDisplay(), new DisplayMode(1280, 720, "Artful SHMUP", false), new PixelFormat(),
+				new VideoSettings(1280, 720), new NullSoundEnvironment());
 		display.bindMouse();
 		cam.setFlyCam(false);
 		setRendered(true, false, true);
@@ -169,9 +171,12 @@ public class Game extends StandardGame {
 		levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
 		addShader(levelObjectShader);
 
-		splashtextures = new Texture[2];
+		splashtextures = new Texture[5];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
-		splashtextures[1] = new Texture(TextureLoader.loadTexture("res/textures/testGreenSplash.png"));
+		splashtextures[1] = new Texture(TextureLoader.loadTexture("res/textures/splash2.png"));
+		splashtextures[2] = new Texture(TextureLoader.loadTexture("res/textures/splash3.png"));
+		splashtextures[3] = new Texture(TextureLoader.loadTexture("res/textures/splash4.png"));
+		splashtextures[4] = new Texture(TextureLoader.loadTexture("res/textures/splash5.png"));
 
 		newSplashShader = new Shader(
 				ShaderLoader.loadShaderFromFile("res/shaders/splashshader.vert", "res/shaders/splashshader.frag"));
@@ -337,18 +342,23 @@ public class Game extends StandardGame {
 	}
 
 	public void setupInputs() {
+		inputs.getInputEvents().remove("game_close");
+		
+		Input inputKeyEscape = new Input(Input.KEYBOARD_EVENT, "Escape", KeyInput.KEY_PRESSED);
 		Input inputKeyUp = new Input(Input.KEYBOARD_EVENT, "W", KeyInput.KEY_DOWN);
 		Input inputKeyDown = new Input(Input.KEYBOARD_EVENT, "S", KeyInput.KEY_DOWN);
 		Input inputKeyLeft = new Input(Input.KEYBOARD_EVENT, "A", KeyInput.KEY_DOWN);
 		Input inputKeyRight = new Input(Input.KEYBOARD_EVENT, "D", KeyInput.KEY_DOWN);
 		Input inputMouseLeft = new Input(Input.MOUSE_EVENT, "Left", MouseInput.MOUSE_BUTTON_DOWN);
 
+		eventEsc = new InputEvent("Escape", inputKeyEscape);
 		eventUp = new InputEvent("Up", inputKeyUp);
 		eventDown = new InputEvent("Down", inputKeyDown);
 		eventLeft = new InputEvent("Left", inputKeyLeft);
 		eventRight = new InputEvent("Right", inputKeyRight);
 		eventShoot = new InputEvent("Shoot", inputMouseLeft);
 
+		inputs.addEvent(eventEsc);
 		inputs.addEvent(eventUp);
 		inputs.addEvent(eventDown);
 		inputs.addEvent(eventLeft);
@@ -361,137 +371,151 @@ public class Game extends StandardGame {
 		debugger.update(fps, 0, 0);
 
 		move.set(0, 0);
-		if (eventUp.isActive()) {
-			move.y -= 1;
-		}
-		if (eventDown.isActive()) {
-			move.y += 1;
-		}
-		if (eventLeft.isActive()) {
-			move.x -= 1;
-		}
-		if (eventRight.isActive()) {
-			move.x += 1;
-		}
-
-		float mouseX = inputs.getMouseX();
-		if (mouseX > 0 || mouseX < 0) {
-			player.getBody().rotate(0, mouseX * mouseSensitivity, 0);
-			updatePlayerRotationVariables();
-		}
-
-		player.setShooting(eventShoot.isActive());
-		for (Shootable shooter : shooters) {
-			shooter.tickShoot(delta);
-			if (shooter.isShooting()) {
-				shooter.shoot();
+		if(eventEsc.isActive()) {
+			isPaused = !isPaused;
+			if(isPaused) {
+				display.unbindMouse();
+			}
+			else {
+				display.bindMouse();
 			}
 		}
+		if(!isPaused) {
+			if (eventUp.isActive()) {
+				move.y -= 1;
+			}
+			if (eventDown.isActive()) {
+				move.y += 1;
+			}
+			if (eventLeft.isActive()) {
+				move.x -= 1;
+			}
+			if (eventRight.isActive()) {
+				move.x += 1;
+			}
 
-		move.transform(playerrotation);
-		if (move.lengthSquared() > 0) {
-			move.normalize();
-			move.scale(player.getAcceleration());
-			player.getBody().applyCentralForce(new Vector3f(move.x, 0, move.y)); // TODO:
-																					// add
-																					// missing
-																					// setter
-																					// to
-																					// rigidbody-methods
-		}
-		if (player.getBody().getLinearVelocity().lengthSquared() > player.getMaxSpeedSquared()) {
-			player.getBody().getLinearVelocity().setLength(player.getMaxSpeed());
-		}
+			float mouseX = inputs.getMouseX();
+			if (mouseX > 0 || mouseX < 0) {
+				player.getBody().rotate(0, mouseX * mouseSensitivity, 0);
+				updatePlayerRotationVariables();
+			}
 
-		for (Enemy enemy : enemies) {
-			enemy.update(delta, player);
-		}
-
-		space.update(delta);
-		physicsdebug.update();
-
-		for (int i = 0; i < shots.size(); i++) {
-			Shot shot = shots.get(i);
-			CollisionManifold<Vector3f> manifold = space.getFirstCollisionManifold(shot.getBody());
-			if (manifold != null) {
-				RigidBody<Vector3f, ?, ?, ?> other = (manifold.getObjects().getFirst().equals(shot.getBody()))
-						? manifold.getObjects().getSecond() : manifold.getObjects().getFirst();
-				Damageable damaged = null;
-				for (Damageable dmg : targets) {
-					if (other.equals(dmg.getBody())) {
-						damaged = dmg;
-						break;
-					}
+			player.setShooting(eventShoot.isActive());
+			for (Shootable shooter : shooters) {
+				shooter.tickShoot(delta);
+				if (shooter.isShooting()) {
+					shooter.shoot();
 				}
-				if (damaged != null) {
-					int damage = 10;
-					damaged.damage(damage);
-					if (damaged.getBody().equals(player.getBody())) {
-						healthbar.scaleTo(damaged.getHealth() / 100f, 1);
-						healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
-						if (damaged.getHealth() <= 0) {
-							int halfLevelSizeX = levelsizeX / 2;
-							int halfLevelSizeZ = levelsizeZ / 2;
-							Vector3f b = new Vector3f(cam.getTranslation());
-							b.scale(0.4f);
-							Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
-							Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
-							deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
-							Quaternionf lookdown = new Quaternionf();
-							lookdown.rotate(-90, new Vector3f(1, 0, 0));
-							deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
-									lookdown);
-							playerAlive = false;
+			}
+
+			move.transform(playerrotation);
+			if (move.lengthSquared() > 0) {
+				move.normalize();
+				move.scale(player.getAcceleration());
+				if (move.y < 0) {
+					move.scale(2);
+				}
+				player.getBody().applyCentralForce(new Vector3f(move.x, 0, move.y)); // TODO:
+																						// add
+																						// missing
+																						// setter
+																						// to
+																						// rigidbody-methods
+			}
+			if (player.getBody().getLinearVelocity().lengthSquared() > player.getMaxSpeedSquared()) {
+				player.getBody().getLinearVelocity().setLength(player.getMaxSpeed());
+			}
+
+			for (Enemy enemy : enemies) {
+				enemy.update(delta, player);
+			}
+
+			space.update(delta);
+			physicsdebug.update();
+
+			for (int i = 0; i < shots.size(); i++) {
+				Shot shot = shots.get(i);
+				CollisionManifold<Vector3f> manifold = space.getFirstCollisionManifold(shot.getBody());
+				if (manifold != null) {
+					RigidBody<Vector3f, ?, ?, ?> other = (manifold.getObjects().getFirst().equals(shot.getBody()))
+							? manifold.getObjects().getSecond() : manifold.getObjects().getFirst();
+					Damageable damaged = null;
+					for (Damageable dmg : targets) {
+						if (other.equals(dmg.getBody())) {
+							damaged = dmg;
+							break;
 						}
 					}
-					System.out.println(damaged.getHealth());
-					if (damaged.getHealth() <= 0) {
-						targets.remove(damaged);
-						shooters.remove(damaged.getShooter());
-						space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
-						damaged.getShader().removeObject(damaged.getShapedObject());
-						damaged.getShapedObject().delete();
+					if (damaged != null) {
+						int damage = 10;
+						damaged.damage(damage);
+						if (damaged.getBody().equals(player.getBody())) {
+							healthbar.scaleTo(damaged.getHealth() / 100f, 1);
+							healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
+							if (damaged.getHealth() <= 0) {
+								int halfLevelSizeX = levelsizeX / 2;
+								int halfLevelSizeZ = levelsizeZ / 2;
+								Vector3f b = new Vector3f(cam.getTranslation());
+								b.scale(0.4f);
+								Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
+								Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
+								deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
+								Quaternionf lookdown = new Quaternionf();
+								lookdown.rotate(-90, new Vector3f(1, 0, 0));
+								deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
+										lookdown);
+								playerAlive = false;
+							}
+						}
+						if (damaged.getHealth() <= 0) {
+							targets.remove(damaged);
+							shooters.remove(damaged.getShooter());
+							space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
+							damaged.getShader().removeObject(damaged.getShapedObject());
+							damaged.getShapedObject().delete();
+						}
 					}
-				}
 
-				Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, 2f, 2f);
-				a.setRenderHints(false, true, false);
-				a.rotate((float) (Math.random() * 360));
-				newSplashShader.addObject(a);
-				newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
-				newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
+					float splashsize = 1.5f + (float) (Math.random() * 1.5f);
+					Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, splashsize, splashsize);
+					a.setRenderHints(false, true, false);
+					a.rotate((float) (Math.random() * 360));
+					newSplashShader.addObject(a);
+					newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
+					newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
 
-				shots.remove(i);
-				deleteShot(shot);
-
-				newSplashFramebuffer.updateTexture();
-
-				newSplashShader.removeObject(a);
-				a.delete();
-
-				combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
-				splashFramebuffer1.copyTo(splashFramebuffer0);
-
-				i--;
-			} else {
-				if (shot.getTranslation().y < -20) {
 					shots.remove(i);
 					deleteShot(shot);
+
+					newSplashFramebuffer.updateTexture();
+
+					newSplashShader.removeObject(a);
+					a.delete();
+
+					combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
+					splashFramebuffer1.copyTo(splashFramebuffer0);
+
+					i--;
+				} else {
+					if (shot.getTranslation().y < -20) {
+						shots.remove(i);
+						deleteShot(shot);
+					}
 				}
 			}
-		}
 
-		if (playerAlive) {
-			cam.translateTo(player.getTranslation());
-			cam.translate(transformedCameraOffset);
-			cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
-		} else {
-			if (deathtimer < 1)
-				deathtimer += delta * 0.0002;
-			else
-				deathtimer = 1;
-			cam.translateTo(deathcamCurve.getPoint(deathtimer));
-			cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
+			if (playerAlive) {
+				cam.translateTo(player.getTranslation());
+				cam.translate(transformedCameraOffset);
+				cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
+			} else {
+				if (deathtimer < 1)
+					deathtimer += delta * 0.0002;
+				else
+					deathtimer = 1;
+				cam.translateTo(deathcamCurve.getPoint(deathtimer));
+				cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
+			}
 		}
 	}
 
