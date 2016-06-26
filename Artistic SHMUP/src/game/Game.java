@@ -1,21 +1,15 @@
 package game;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import broadphase.SAP;
-import curves.BezierCurve3;
-import curves.SquadCurve3;
-import display.DisplayMode;
-import display.GLDisplay;
-import display.PixelFormat;
-import display.VideoSettings;
 import gui.Font;
 import input.Input;
 import input.InputEvent;
 import input.KeyInput;
 import input.MouseInput;
 import integration.VerletIntegration;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import loader.FontLoader;
 import loader.ShaderLoader;
 import loader.TextureLoader;
@@ -35,6 +29,8 @@ import objects.Shootable;
 import objects.Shot;
 import objects.StandardCannon;
 import objects.Tower;
+import particle.ParticleSystem3;
+import particle.SimpleParticleSystem;
 import physics.PhysicsDebug;
 import physics.PhysicsShapeCreator;
 import physics.PhysicsSpace;
@@ -56,6 +52,13 @@ import utils.ProjectionHelper;
 import vector.Vector2f;
 import vector.Vector3f;
 import vector.Vector4f;
+import broadphase.SAP;
+import curves.BezierCurve3;
+import curves.SquadCurve3;
+import display.DisplayMode;
+import display.GLDisplay;
+import display.PixelFormat;
+import display.VideoSettings;
 
 public class Game extends StandardGame {
 	Debugger debugger;
@@ -70,6 +73,7 @@ public class Game extends StandardGame {
 	final float mouseSensitivity = -0.1f; // negative sensitivity = not inverted
 
 	final Vector3f front = new Vector3f(0, 0, 1);
+	final Vector3f zero = new Vector3f(0, 0, 0);
 	Vector3f playerfront = new Vector3f();
 	Vector2f move = new Vector2f();
 	Complexf playerrotation = new Complexf();
@@ -100,6 +104,8 @@ public class Game extends StandardGame {
 	Quad healthbar;
 	BezierCurve3 deathcamCurve;
 	SquadCurve3 deathcamRotationCurve;
+	ParticleSystem3 lifebars;
+	final Vector2f enemyLifebarSize = new Vector2f(1, 0.5);
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
@@ -192,6 +198,10 @@ public class Game extends StandardGame {
 		combinationShader = new PostProcessingShader(combShader, 1);
 		combinationShader.getShader().addObject(screen);
 
+		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert", 
+				"res/shader/healthbarshader.frag"));
+		addShader(healthbarshader);
+		
 		Quad healthbarBackground = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarBorder + healthbarHalfSizeX,
 				healthbarBorder + healthbarHalfSizeY);
@@ -199,6 +209,10 @@ public class Game extends StandardGame {
 		healthbar = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarHalfSizeX, healthbarHalfSizeY);
 		redcolorshaderInterface.addObject(healthbar);
+		
+		lifebars = new SimpleParticleSystem(new Vector3f(), cam, false);
+		lifebars.getParticleObject().setRenderHints(true, true, false);
+		playercolorshader.addObject(lifebars);
 
 		float halflevelsizeX = levelsizeX / 2f;
 		float halflevelsizeZ = levelsizeZ / 2f;
@@ -293,6 +307,7 @@ public class Game extends StandardGame {
 		shooters.add(tower);
 		targets.add(tower);
 		enemies.add(tower);
+		lifebars.addParticle(new Vector3f(tower.getTranslation().x, tower.getTranslation().y + 2, tower.getTranslation().z), zero, enemyLifebarSize, 1);
 	}
 
 	public void generateLevel(int numboxes, int numtowers) {
@@ -516,6 +531,7 @@ public class Game extends StandardGame {
 				cam.translateTo(deathcamCurve.getPoint(deathtimer));
 				cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
 			}
+			lifebars.updateParticles(0, 10);
 		}
 	}
 
