@@ -86,6 +86,9 @@ public class Game extends StandardGame {
 
 	boolean last0 = true;
 	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
+	boolean current0 = true;
+	Texture currentSplashTexture;
+	FramebufferObject[] splashFramebuffer;
 	Box ground;
 
 	final int healthbarHalfSizeX = 100;
@@ -159,12 +162,21 @@ public class Game extends StandardGame {
 				new Camera2(new Vector2f(0, 0)));
 		splashFramebuffer1 = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
 				new Camera2(new Vector2f(0, 0)));
+		currentSplashTexture = new Texture(splashFramebuffer0.getColorTextureID());
+
+		FramebufferObject[][] splashFramebuffer = new FramebufferObject[splashSubdivision][splashSubdivision];
+		for (int x = 0; x < splashSubdivision; x++) {
+			for (int y = 0; y < splashSubdivision; y++) {
+				splashFramebuffer[x][y] = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+						new Camera2(new Vector2f(0, 0)));
+			}
+		}
 
 		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
 				"res/shaders/textureshader.frag");
 
 		splashGroundShader = new Shader(textureshaderID);
-		splashGroundShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
+		splashGroundShader.addArgument("u_texture", currentSplashTexture);
 		addShader(splashGroundShader);
 
 		Shader frameShader = new Shader(textureshaderID);
@@ -173,7 +185,7 @@ public class Game extends StandardGame {
 
 		levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/levelobjectshader.vert",
 				"res/shaders/levelobjectshader.frag"));
-		levelObjectShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
+		levelObjectShader.addArgument("u_texture", currentSplashTexture);
 		levelObjectShader.addArgument("u_levelsizeX", levelsizeX);
 		levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
 		addShader(levelObjectShader);
@@ -193,7 +205,7 @@ public class Game extends StandardGame {
 
 		Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
 				"res/shaders/combinationshader.frag"));
-		combShader.addArgument("u_texture", splashFramebuffer0.getColorTexture());
+		combShader.addArgument("u_texture", currentSplashTexture);
 		combShader.addArgument("u_depthTexture", splashFramebuffer0.getDepthTexture());
 		combShader.addArgument("u_splashTexture", newSplashFramebuffer.getColorTexture());
 		combinationShader = new PostProcessingShader(combShader, 1);
@@ -484,8 +496,6 @@ public class Game extends StandardGame {
 								playerAlive = false;
 							}
 						} else {
-							System.out.println(damaged.getHealthbarID() * 4 + "; "
-									+ (int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000));
 							lifebars.removeParticle(damaged.getHealthbarID());
 							damaged.setHealthbarID(lifebars.addParticle(
 									new Vector3f(damaged.getTranslation().x, damaged.getTranslation().y + 2,
@@ -524,8 +534,14 @@ public class Game extends StandardGame {
 					newSplashShader.removeObject(a);
 					a.delete();
 
-					combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
-					splashFramebuffer1.copyTo(splashFramebuffer0);
+					if (current0) {
+						combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
+						currentSplashTexture.setTextureID(splashFramebuffer1.getColorTextureID());
+					} else {
+						combinationShader.apply(splashFramebuffer1, splashFramebuffer0);
+						currentSplashTexture.setTextureID(splashFramebuffer0.getColorTextureID());
+					}
+					current0 = !current0;
 
 					i--;
 				} else {
