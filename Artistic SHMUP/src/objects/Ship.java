@@ -15,10 +15,11 @@ public class Ship extends Box implements Shootable, Damageable {
 	List<Cannon> cannons;
 	boolean isShooting = false;
 	Vector3f shipfront;
-	int health;
+	int maxhealth, health, healthbarID;
 	Shader shader;
 
-	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ, Shader shader) {
+	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ, Shader shader,
+			int healthbarID) {
 		super(x, y, z, halfsizeX, halfsizeY, halfsizeZ);
 		body = new RigidBody3(PhysicsShapeCreator.create(this));
 		body.setMass(1);
@@ -28,8 +29,10 @@ public class Ship extends Box implements Shootable, Damageable {
 		body.setAngularFactor(new Vector3f(0, 0, 0));
 
 		this.shader = shader;
-		health = 100;
+		maxhealth = 100;
+		health = maxhealth;
 		cannons = new ArrayList<Cannon>();
+		this.healthbarID = healthbarID;
 	}
 
 	public RigidBody3 getBody() {
@@ -91,5 +94,20 @@ public class Ship extends Box implements Shootable, Damageable {
 	@Override
 	public ShapedObject3 getShapedObject() {
 		return this;
+	}
+
+	@Override
+	public int getHealthbarID() {
+		return healthbarID;
+	}
+
+	@Override
+	public int getMaxHealth() {
+		return maxhealth;
+	}
+
+	@Override
+	public void setHealthbarID(int healthbarID) {
+		this.healthbarID = healthbarID;
 	}
 }

@@ -8,7 +8,7 @@ public class Player extends Ship {
 	final float maxspeedSqared = maxspeed * maxspeed;
 
 	public Player(float x, float y, float z, Shader shader) {
-		super(x, y, z, 1, 1, 1, shader);
+		super(x, y, z, 1, 1, 1, shader, -1);
 	}
 
 	public float getAcceleration() {

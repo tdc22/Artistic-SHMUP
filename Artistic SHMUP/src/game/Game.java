@@ -1,15 +1,21 @@
 package game;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import broadphase.SAP;
+import curves.BezierCurve3;
+import curves.SquadCurve3;
+import display.DisplayMode;
+import display.GLDisplay;
+import display.PixelFormat;
+import display.VideoSettings;
 import gui.Font;
 import input.Input;
 import input.InputEvent;
 import input.KeyInput;
 import input.MouseInput;
 import integration.VerletIntegration;
-
-import java.util.ArrayList;
-import java.util.List;
-
 import loader.FontLoader;
 import loader.ShaderLoader;
 import loader.TextureLoader;
@@ -29,7 +35,6 @@ import objects.Shootable;
 import objects.Shot;
 import objects.StandardCannon;
 import objects.Tower;
-import particle.ParticleSystem3;
 import particle.SimpleParticleSystem;
 import physics.PhysicsDebug;
 import physics.PhysicsShapeCreator;
@@ -48,17 +53,11 @@ import sound.NullSoundEnvironment;
 import texture.FramebufferObject;
 import texture.Texture;
 import utils.Debugger;
+import utils.DefaultValues;
 import utils.ProjectionHelper;
 import vector.Vector2f;
 import vector.Vector3f;
 import vector.Vector4f;
-import broadphase.SAP;
-import curves.BezierCurve3;
-import curves.SquadCurve3;
-import display.DisplayMode;
-import display.GLDisplay;
-import display.PixelFormat;
-import display.VideoSettings;
 
 public class Game extends StandardGame {
 	Debugger debugger;
@@ -104,8 +103,8 @@ public class Game extends StandardGame {
 	Quad healthbar;
 	BezierCurve3 deathcamCurve;
 	SquadCurve3 deathcamRotationCurve;
-	ParticleSystem3 lifebars;
-	final Vector2f enemyLifebarSize = new Vector2f(1, 0.5);
+	SimpleParticleSystem lifebars;
+	final Vector2f enemyLifebarSize = new Vector2f(1, 0.3);
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
@@ -117,8 +116,10 @@ public class Game extends StandardGame {
 
 	@Override
 	public void init() {
-		initDisplay(new GLDisplay(), new DisplayMode(1280, 720, "Artful SHMUP", false), new PixelFormat(),
-				new VideoSettings(1280, 720), new NullSoundEnvironment());
+		initDisplay(new GLDisplay(),
+				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 0, 1280, 720, "Artful SHMUP", false,
+						DefaultValues.DEFAULT_DISPLAY_RESIZEABLE, DefaultValues.DEFAULT_DISPLAY_FULLSCREEN),
+				new PixelFormat(), new VideoSettings(1280, 720), new NullSoundEnvironment());
 		display.bindMouse();
 		cam.setFlyCam(false);
 		setRendered(true, false, true);
@@ -198,10 +199,10 @@ public class Game extends StandardGame {
 		combinationShader = new PostProcessingShader(combShader, 1);
 		combinationShader.getShader().addObject(screen);
 
-		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert", 
-				"res/shader/healthbarshader.frag"));
+		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
+				"res/shaders/healthbarshader.frag"));
 		addShader(healthbarshader);
-		
+
 		Quad healthbarBackground = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarBorder + healthbarHalfSizeX,
 				healthbarBorder + healthbarHalfSizeY);
@@ -209,10 +210,10 @@ public class Game extends StandardGame {
 		healthbar = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarHalfSizeX, healthbarHalfSizeY);
 		redcolorshaderInterface.addObject(healthbar);
-		
+
 		lifebars = new SimpleParticleSystem(new Vector3f(), cam, false);
 		lifebars.getParticleObject().setRenderHints(true, true, false);
-		playercolorshader.addObject(lifebars);
+		healthbarshader.addObject(lifebars);
 
 		float halflevelsizeX = levelsizeX / 2f;
 		float halflevelsizeZ = levelsizeZ / 2f;
@@ -298,7 +299,7 @@ public class Game extends StandardGame {
 	}
 
 	private void addTower(float x, float y, float z) {
-		Tower tower = new Tower(x, y, z, blackcolorshader);
+		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleObject().getVertices().size() / 4);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get((int) (Math.random() * shotColorShaders.size())), shotgeometry,
@@ -307,7 +308,9 @@ public class Game extends StandardGame {
 		shooters.add(tower);
 		targets.add(tower);
 		enemies.add(tower);
-		lifebars.addParticle(new Vector3f(tower.getTranslation().x, tower.getTranslation().y + 2, tower.getTranslation().z), zero, enemyLifebarSize, 1);
+		lifebars.addParticle(
+				new Vector3f(tower.getTranslation().x, tower.getTranslation().y + 2, tower.getTranslation().z), zero,
+				enemyLifebarSize, 1000);
 	}
 
 	public void generateLevel(int numboxes, int numtowers) {
@@ -358,7 +361,7 @@ public class Game extends StandardGame {
 
 	public void setupInputs() {
 		inputs.getInputEvents().remove("game_close");
-		
+
 		Input inputKeyEscape = new Input(Input.KEYBOARD_EVENT, "Escape", KeyInput.KEY_PRESSED);
 		Input inputKeyUp = new Input(Input.KEYBOARD_EVENT, "W", KeyInput.KEY_DOWN);
 		Input inputKeyDown = new Input(Input.KEYBOARD_EVENT, "S", KeyInput.KEY_DOWN);
@@ -386,16 +389,15 @@ public class Game extends StandardGame {
 		debugger.update(fps, 0, 0);
 
 		move.set(0, 0);
-		if(eventEsc.isActive()) {
+		if (eventEsc.isActive()) {
 			isPaused = !isPaused;
-			if(isPaused) {
+			if (isPaused) {
 				display.unbindMouse();
-			}
-			else {
+			} else {
 				display.bindMouse();
 			}
 		}
-		if(!isPaused) {
+		if (!isPaused) {
 			if (eventUp.isActive()) {
 				move.y -= 1;
 			}
@@ -464,7 +466,7 @@ public class Game extends StandardGame {
 					if (damaged != null) {
 						int damage = 10;
 						damaged.damage(damage);
-						if (damaged.getBody().equals(player.getBody())) {
+						if (damaged.getHealthbarID() == -1) {
 							healthbar.scaleTo(damaged.getHealth() / 100f, 1);
 							healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
 							if (damaged.getHealth() <= 0) {
@@ -481,6 +483,15 @@ public class Game extends StandardGame {
 										lookdown);
 								playerAlive = false;
 							}
+						} else {
+							System.out.println(damaged.getHealthbarID() * 4 + "; "
+									+ (int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000));
+							lifebars.removeParticle(damaged.getHealthbarID());
+							damaged.setHealthbarID(lifebars.addParticle(
+									new Vector3f(damaged.getTranslation().x, damaged.getTranslation().y + 2,
+											damaged.getTranslation().z),
+									zero, enemyLifebarSize,
+									(int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000)));
 						}
 						if (damaged.getHealth() <= 0) {
 							targets.remove(damaged);
@@ -488,6 +499,11 @@ public class Game extends StandardGame {
 							space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 							damaged.getShader().removeObject(damaged.getShapedObject());
 							damaged.getShapedObject().delete();
+							if (damaged.getHealthbarID() == -1) {
+
+							} else {
+								lifebars.removeParticle(damaged.getHealthbarID());
+							}
 						}
 					}
 
@@ -496,7 +512,8 @@ public class Game extends StandardGame {
 					a.setRenderHints(false, true, false);
 					a.rotate((float) (Math.random() * 360));
 					newSplashShader.addObject(a);
-					newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
+					newSplashShader.setArgument("u_texture",
+							splashtextures[(int) (Math.random() * splashtextures.length)]);
 					newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
 
 					shots.remove(i);
@@ -531,7 +548,7 @@ public class Game extends StandardGame {
 				cam.translateTo(deathcamCurve.getPoint(deathtimer));
 				cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
 			}
-			lifebars.updateParticles(0, 10);
+			lifebars.updateParticles(0, 1000);
 		}
 	}
 
