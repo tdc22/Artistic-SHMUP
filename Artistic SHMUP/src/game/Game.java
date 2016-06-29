@@ -610,12 +610,15 @@ public class Game extends StandardGame {
 		int minZ = calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
 		int maxX = calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
 		int maxZ = calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
-		if (maxX == splashSubdivision)
-			maxX--;
-		if (maxZ == splashSubdivision)
-			maxZ--;
 		
-		System.out.println(minX + "; " + maxX + "; " + minZ + "; " + maxZ);
+		if (minX >= splashSubdivision)
+			minX--;
+		if (minZ >= splashSubdivision)
+			minZ--;
+		if (maxX >= splashSubdivision)
+			maxX--;
+		if (maxZ >= splashSubdivision)
+			maxZ--;
 
 		affectedSplashGrids.add(new Vector2f(minX, minZ));
 		if (maxX > minX) {
