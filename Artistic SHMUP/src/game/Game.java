@@ -95,7 +95,7 @@ public class Game extends StandardGame {
 	boolean playerAlive = true;
 	float deathtimer = 0;
 
-	Shader newSplashShader, splashQuadShader, blackcolorshader;
+	Shader newSplashShader, blackcolorshader;
 	Texture[] splashtextures;
 
 	Shader[][] splashGroundShaders, splashObjectShaders;
@@ -124,7 +124,7 @@ public class Game extends StandardGame {
 	@Override
 	public void init() {
 		initDisplay(new GLDisplay(),
-				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 0, 1280, 720, "Artful SHMUP", false,
+				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 20, 1280, 720, "Artful SHMUP", false,
 						DefaultValues.DEFAULT_DISPLAY_RESIZEABLE, DefaultValues.DEFAULT_DISPLAY_FULLSCREEN),
 				new PixelFormat(), new VideoSettings(1280, 720), new NullSoundEnvironment());
 		display.bindMouse();
@@ -215,6 +215,7 @@ public class Game extends StandardGame {
 		currentSplashTextures = new Texture[splashSubdivision][splashSubdivision];
 		float halfboxsizeX = levelsizeX / (float) (splashSubdivision * 2);
 		float halfboxsizeZ = levelsizeZ / (float) (splashSubdivision * 2);
+		System.out.println("hbs " + 2 * halfboxsizeX + "; " + 2 * halfboxsizeZ);
 		groundboxes = new Box[splashSubdivision][splashSubdivision];
 
 		for (int x = 0; x < splashSubdivision; x++) {
@@ -234,8 +235,8 @@ public class Game extends StandardGame {
 				Shader levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile(
 						"res/shaders/levelobjectshader.vert", "res/shaders/levelobjectshader.frag"));
 				levelObjectShader.addArgument("u_texture", currentSplashTextures[x][z]);
-				levelObjectShader.addArgument("u_levelsizeX", levelsizeX);
-				levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
+				levelObjectShader.addArgument("u_groundblocksizeX", (int) (2 * halfboxsizeX));
+				levelObjectShader.addArgument("u_groundblocksizeZ", (int) (2 * halfboxsizeZ));
 				addShader(levelObjectShader);
 				splashObjectShaders[x][z] = levelObjectShader;
 
@@ -479,8 +480,14 @@ public class Game extends StandardGame {
 																						// to
 																						// rigidbody-methods
 			}
-			if (player.getBody().getLinearVelocity().lengthSquared() > player.getMaxSpeedSquared()) {
-				player.getBody().getLinearVelocity().setLength(player.getMaxSpeed());
+			if (player.getBody().getLinearVelocity().lengthSquared() > 0) {
+				if (player.getBody().getLinearVelocity().lengthSquared() > player.getMaxSpeedSquared()) {
+					player.getBody().getLinearVelocity().setLength(player.getMaxSpeed());
+				}
+				Vector3f drag = new Vector3f(player.getBody().getLinearVelocity());
+				drag.scale(1f);
+				drag.negate();
+				player.getBody().applyCentralForce(drag);
 			}
 
 			for (Enemy enemy : enemies) {
@@ -560,8 +567,10 @@ public class Game extends StandardGame {
 					for (Vector2f grids : getAffectedSplashGrids(a)) {
 						int x = (int) grids.x;
 						int z = (int) grids.y;
-						newSplashFramebuffer[x][z].updateTexture();
-						splashGround(x, z);
+						if (x >= 0 && z >= 0) {
+							newSplashFramebuffer[x][z].updateTexture();
+							splashGround(x, z);
+						}
 					}
 					newSplashShader.removeObject(a);
 
@@ -610,7 +619,7 @@ public class Game extends StandardGame {
 		int minZ = calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
 		int maxX = calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
 		int maxZ = calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
-		
+
 		if (minX >= splashSubdivision)
 			minX--;
 		if (minZ >= splashSubdivision)
@@ -635,7 +644,6 @@ public class Game extends StandardGame {
 	}
 
 	private void splashGround(int x, int z) {
-//		System.out.println(x + "; " + z);
 		if (splashGroundFramebufferFirst[x][z]) {
 			splashCombinationShaders[x][z].apply(splashGroundFramebuffers[x][z], splashGroundFramebufferHelpers[x][z]);
 			currentSplashTextures[x][z].setTextureID(splashGroundFramebufferHelpers[x][z].getColorTextureID());
