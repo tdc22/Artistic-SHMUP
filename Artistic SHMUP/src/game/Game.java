@@ -298,7 +298,7 @@ public class Game extends StandardGame {
 			addShader(s);
 		}
 
-		generateLevel(100, 0);
+		generateLevel(100, 10);
 
 		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader);
 		space.addRigidBody(player, player.getBody());
@@ -557,15 +557,13 @@ public class Game extends StandardGame {
 					shots.remove(i);
 					deleteShot(shot);
 
-					int x = calculateSplashGridX((int) shot.getTranslation().x);
-					int z = calculateSplashGridZ((int) shot.getTranslation().z);
-					newSplashFramebuffer[x][z].updateTexture();
-
-					newSplashShader.removeObject(a);
-
 					for (Vector2f grids : getAffectedSplashGrids(a)) {
-						splashGround((int) grids.x, (int) grids.y);
+						int x = (int) grids.x;
+						int z = (int) grids.y;
+						newSplashFramebuffer[x][z].updateTexture();
+						splashGround(x, z);
 					}
+					newSplashShader.removeObject(a);
 
 					a.delete();
 					i--;
@@ -616,6 +614,8 @@ public class Game extends StandardGame {
 			maxX--;
 		if (maxZ == splashSubdivision)
 			maxZ--;
+		
+		System.out.println(minX + "; " + maxX + "; " + minZ + "; " + maxZ);
 
 		affectedSplashGrids.add(new Vector2f(minX, minZ));
 		if (maxX > minX) {
@@ -632,7 +632,7 @@ public class Game extends StandardGame {
 	}
 
 	private void splashGround(int x, int z) {
-		System.out.println(x + "; " + z);
+//		System.out.println(x + "; " + z);
 		if (splashGroundFramebufferFirst[x][z]) {
 			splashCombinationShaders[x][z].apply(splashGroundFramebuffers[x][z], splashGroundFramebufferHelpers[x][z]);
 			currentSplashTextures[x][z].setTextureID(splashGroundFramebufferHelpers[x][z].getColorTextureID());
