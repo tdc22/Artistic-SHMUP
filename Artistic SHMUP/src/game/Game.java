@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import broadphase.SAP;
+import collisionshape.BoxShape;
 import curves.BezierCurve3;
 import curves.SquadCurve3;
 import display.DisplayMode;
@@ -81,15 +82,10 @@ public class Game extends StandardGame {
 
 	final int levelsizeX = 160; // mod 2 = 0 !!!
 	final int levelsizeZ = 160;
-	final int splashResolution = 2048; // power of 2 !!!
-	final int splashSubdivision = 2;
+	final int splashResolution = 512; // power of 2 !!!
+	final int splashSubdivision = 4;
 
-	boolean last0 = true;
-	FramebufferObject newSplashFramebuffer, splashFramebuffer0, splashFramebuffer1;
-	boolean current0 = true;
-	Texture currentSplashTexture;
-	FramebufferObject[] splashFramebuffer;
-	Box ground;
+	BoxShape groundshape;
 
 	final int healthbarHalfSizeX = 100;
 	final int healthbarHalfSizeY = 10;
@@ -99,9 +95,17 @@ public class Game extends StandardGame {
 	boolean playerAlive = true;
 	float deathtimer = 0;
 
-	Shader newSplashShader, splashQuadShader, splashGroundShader, levelObjectShader, blackcolorshader;
+	Shader newSplashShader, splashQuadShader, blackcolorshader;
 	Texture[] splashtextures;
-	PostProcessingShader combinationShader;
+
+	Shader[][] splashGroundShaders, splashObjectShaders;
+	FramebufferObject[][] splashGroundFramebuffers;
+	FramebufferObject[][] splashGroundFramebufferHelpers;
+	FramebufferObject[][] newSplashFramebuffer;
+	PostProcessingShader[][] splashCombinationShaders;
+	boolean[][] splashGroundFramebufferFirst;
+	Texture[][] currentSplashTextures;
+	Box[][] groundboxes;
 
 	Quad healthbar;
 	BezierCurve3 deathcamCurve;
@@ -126,7 +130,8 @@ public class Game extends StandardGame {
 		display.bindMouse();
 		cam.setFlyCam(false);
 		setRendered(true, false, true);
-		layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX, levelsizeZ, 0, -1, 1));
+		layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
+				levelsizeZ / (float) splashSubdivision, 0, -1, 1));
 
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()),
 				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
@@ -156,39 +161,12 @@ public class Game extends StandardGame {
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface, font, cam);
 		physicsdebug = new PhysicsDebug(inputs, font, space, defaultshader);
 
-		newSplashFramebuffer = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
-				new Camera2(new Vector2f(0, 0)));
-		splashFramebuffer0 = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
-				new Camera2(new Vector2f(0, 0)));
-		splashFramebuffer1 = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
-				new Camera2(new Vector2f(0, 0)));
-		currentSplashTexture = new Texture(splashFramebuffer0.getColorTextureID());
-
-		FramebufferObject[][] splashFramebuffer = new FramebufferObject[splashSubdivision][splashSubdivision];
-		for (int x = 0; x < splashSubdivision; x++) {
-			for (int y = 0; y < splashSubdivision; y++) {
-				splashFramebuffer[x][y] = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
-						new Camera2(new Vector2f(0, 0)));
-			}
-		}
-
 		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
 				"res/shaders/textureshader.frag");
-
-		splashGroundShader = new Shader(textureshaderID);
-		splashGroundShader.addArgument("u_texture", currentSplashTexture);
-		addShader(splashGroundShader);
 
 		Shader frameShader = new Shader(textureshaderID);
 		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood1.png")));
 		addShader(frameShader);
-
-		levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/levelobjectshader.vert",
-				"res/shaders/levelobjectshader.frag"));
-		levelObjectShader.addArgument("u_texture", currentSplashTexture);
-		levelObjectShader.addArgument("u_levelsizeX", levelsizeX);
-		levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
-		addShader(levelObjectShader);
 
 		splashtextures = new Texture[5];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
@@ -202,14 +180,6 @@ public class Game extends StandardGame {
 		newSplashShader.addArgument("u_texture", splashtextures[0]);
 		newSplashShader.addArgument("u_color", new Vector4f(0, 1, 0, 1));
 		addShader2d(newSplashShader);
-
-		Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
-				"res/shaders/combinationshader.frag"));
-		combShader.addArgument("u_texture", currentSplashTexture);
-		combShader.addArgument("u_depthTexture", splashFramebuffer0.getDepthTexture());
-		combShader.addArgument("u_splashTexture", newSplashFramebuffer.getColorTexture());
-		combinationShader = new PostProcessingShader(combShader, 1);
-		combinationShader.getShader().addObject(screen);
 
 		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
 				"res/shaders/healthbarshader.frag"));
@@ -229,12 +199,66 @@ public class Game extends StandardGame {
 
 		float halflevelsizeX = levelsizeX / 2f;
 		float halflevelsizeZ = levelsizeZ / 2f;
-		ground = new Box(halflevelsizeX, -2f, halflevelsizeZ, halflevelsizeX, 1, halflevelsizeZ);
-		ground.setRenderHints(false, true, false);
-		RigidBody3 rbground = new RigidBody3(PhysicsShapeCreator.create(ground));
+		groundshape = new BoxShape(halflevelsizeX, -2f, halflevelsizeZ, halflevelsizeX, 1, halflevelsizeZ);
+		RigidBody3 rbground = new RigidBody3(groundshape);
+		rbground.translate(halflevelsizeX, -2f, halflevelsizeZ);
 		rbground.setMass(0);
-		space.addRigidBody(ground, rbground);
-		splashGroundShader.addObject(ground);
+		space.addRigidBody(rbground);
+
+		splashGroundFramebuffers = new FramebufferObject[splashSubdivision][splashSubdivision];
+		splashGroundFramebufferHelpers = new FramebufferObject[splashSubdivision][splashSubdivision];
+		newSplashFramebuffer = new FramebufferObject[splashSubdivision][splashSubdivision];
+		splashGroundFramebufferFirst = new boolean[splashSubdivision][splashSubdivision];
+		splashGroundShaders = new Shader[splashSubdivision][splashSubdivision];
+		splashObjectShaders = new Shader[splashSubdivision][splashSubdivision];
+		splashCombinationShaders = new PostProcessingShader[splashSubdivision][splashSubdivision];
+		currentSplashTextures = new Texture[splashSubdivision][splashSubdivision];
+		float halfboxsizeX = levelsizeX / (float) (splashSubdivision * 2);
+		float halfboxsizeZ = levelsizeZ / (float) (splashSubdivision * 2);
+		groundboxes = new Box[splashSubdivision][splashSubdivision];
+
+		for (int x = 0; x < splashSubdivision; x++) {
+			for (int z = 0; z < splashSubdivision; z++) {
+				Vector2f campos = new Vector2f(2 * halfboxsizeX * x, 2 * halfboxsizeZ * z);
+				FramebufferObject groundfbo = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+						new Camera2(campos));
+				splashGroundFramebuffers[x][z] = groundfbo;
+				splashGroundFramebufferHelpers[x][z] = new FramebufferObject(layer2d, splashResolution,
+						splashResolution, 0, new Camera2(campos));
+				newSplashFramebuffer[x][z] = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+						new Camera2(campos));
+				splashGroundFramebufferFirst[x][z] = true;
+
+				currentSplashTextures[x][z] = new Texture(groundfbo.getColorTextureID());
+
+				Shader levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile(
+						"res/shaders/levelobjectshader.vert", "res/shaders/levelobjectshader.frag"));
+				levelObjectShader.addArgument("u_texture", currentSplashTextures[x][z]);
+				levelObjectShader.addArgument("u_levelsizeX", levelsizeX);
+				levelObjectShader.addArgument("u_levelsizeZ", levelsizeZ);
+				addShader(levelObjectShader);
+				splashObjectShaders[x][z] = levelObjectShader;
+
+				Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
+						"res/shaders/combinationshader.frag"));
+				combShader.addArgument("u_texture", currentSplashTextures[x][z]);
+				combShader.addArgument("u_depthTexture", splashGroundFramebuffers[x][z].getDepthTexture());
+				combShader.addArgument("u_splashTexture", newSplashFramebuffer[x][z].getColorTexture());
+				PostProcessingShader combinationShader = new PostProcessingShader(combShader, 1);
+				combinationShader.getShader().addObject(screen);
+				splashCombinationShaders[x][z] = combinationShader;
+
+				Shader groundshader = new Shader(textureshaderID);
+				groundshader.addArgument("u_texture", currentSplashTextures[x][z]);
+				addShader(groundshader);
+				splashGroundShaders[x][z] = groundshader;
+
+				Box groundbox = new Box(halfboxsizeX + (2 * halfboxsizeX * x), -2f,
+						halfboxsizeZ + (2 * halfboxsizeZ * z), halfboxsizeX, 1, halfboxsizeZ);
+				groundbox.setRenderHints(false, true, false);
+				groundshader.addObject(groundbox);
+			}
+		}
 
 		addStaticBox(halflevelsizeX, 0, 0.5f, halflevelsizeX, 1, 0.5f);
 		addStaticBox(halflevelsizeX, 0, levelsizeZ - 0.5f, halflevelsizeX, 1, 0.5f);
@@ -274,7 +298,7 @@ public class Game extends StandardGame {
 			addShader(s);
 		}
 
-		generateLevel(100, 10);
+		generateLevel(100, 0);
 
 		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader);
 		space.addRigidBody(player, player.getBody());
@@ -297,7 +321,11 @@ public class Game extends StandardGame {
 		newSplashShader.addObject(a);
 		newSplashShader.setArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/whitePixel.png")));
 		newSplashShader.setArgument("u_color", new Vector4f(1, 1, 1, 1));
-		splashFramebuffer0.updateTexture();
+		for (FramebufferObject[] fbos : splashGroundFramebuffers) {
+			for (FramebufferObject fbo : fbos) {
+				fbo.updateTexture();
+			}
+		}
 		newSplashShader.removeObject(a);
 		a.delete();
 	}
@@ -307,7 +335,7 @@ public class Game extends StandardGame {
 		box.setRenderHints(false, false, false);
 		RigidBody3 rb = new RigidBody3(PhysicsShapeCreator.create(box));
 		space.addRigidBody(box, rb);
-		levelObjectShader.addObject(box);
+		splashObjectShaders[calculateSplashGridX((int) x)][calculateSplashGridZ((int) z)].addObject(box);
 	}
 
 	private void addTower(float x, float y, float z) {
@@ -529,20 +557,17 @@ public class Game extends StandardGame {
 					shots.remove(i);
 					deleteShot(shot);
 
-					newSplashFramebuffer.updateTexture();
+					int x = calculateSplashGridX((int) shot.getTranslation().x);
+					int z = calculateSplashGridZ((int) shot.getTranslation().z);
+					newSplashFramebuffer[x][z].updateTexture();
 
 					newSplashShader.removeObject(a);
-					a.delete();
 
-					if (current0) {
-						combinationShader.apply(splashFramebuffer0, splashFramebuffer1);
-						currentSplashTexture.setTextureID(splashFramebuffer1.getColorTextureID());
-					} else {
-						combinationShader.apply(splashFramebuffer1, splashFramebuffer0);
-						currentSplashTexture.setTextureID(splashFramebuffer0.getColorTextureID());
+					for (Vector2f grids : getAffectedSplashGrids(a)) {
+						splashGround((int) grids.x, (int) grids.y);
 					}
-					current0 = !current0;
 
+					a.delete();
 					i--;
 				} else {
 					if (shot.getTranslation().y < -20) {
@@ -566,6 +591,56 @@ public class Game extends StandardGame {
 			}
 			lifebars.updateParticles(0, 1000);
 		}
+	}
+
+	private int calculateSplashGridX(int x) {
+		return x / (int) (levelsizeX / (float) splashSubdivision);
+	}
+
+	private int calculateSplashGridZ(int z) {
+		return z / (int) (levelsizeZ / (float) splashSubdivision);
+	}
+
+	List<Vector2f> affectedSplashGrids = new ArrayList<Vector2f>();
+
+	private List<Vector2f> getAffectedSplashGrids(Quad quad) {
+		affectedSplashGrids.clear();
+
+		float diag = (float) Math.sqrt(quad.getSize().x * quad.getSize().x + quad.getSize().y * quad.getSize().y);
+
+		int minX = calculateSplashGridX((int) Math.floor(quad.getTranslation().getX() - diag));
+		int minZ = calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
+		int maxX = calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
+		int maxZ = calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
+		if (maxX == splashSubdivision)
+			maxX--;
+		if (maxZ == splashSubdivision)
+			maxZ--;
+
+		affectedSplashGrids.add(new Vector2f(minX, minZ));
+		if (maxX > minX) {
+			affectedSplashGrids.add(new Vector2f(maxX, minZ));
+		}
+		if (maxZ > minZ) {
+			affectedSplashGrids.add(new Vector2f(minX, maxZ));
+		}
+		if (maxX > minX && maxZ > minZ) {
+			affectedSplashGrids.add(new Vector2f(maxX, maxZ));
+		}
+
+		return affectedSplashGrids;
+	}
+
+	private void splashGround(int x, int z) {
+		System.out.println(x + "; " + z);
+		if (splashGroundFramebufferFirst[x][z]) {
+			splashCombinationShaders[x][z].apply(splashGroundFramebuffers[x][z], splashGroundFramebufferHelpers[x][z]);
+			currentSplashTextures[x][z].setTextureID(splashGroundFramebufferHelpers[x][z].getColorTextureID());
+		} else {
+			splashCombinationShaders[x][z].apply(splashGroundFramebufferHelpers[x][z], splashGroundFramebuffers[x][z]);
+			currentSplashTextures[x][z].setTextureID(splashGroundFramebuffers[x][z].getColorTextureID());
+		}
+		splashGroundFramebufferFirst[x][z] = !splashGroundFramebufferFirst[x][z];
 	}
 
 	private void deleteShot(Shot shot) {
