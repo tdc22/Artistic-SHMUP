@@ -4,13 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import math.QuatMath;
-import physics.PhysicsShapeCreator;
 import quaternion.Quaternionf;
 import shader.Shader;
-import shape.Cylinder;
 import vector.Vector3f;
 
-public class Ship extends Cylinder implements Shootable, Damageable {
+public class Ship extends ShapedObject3 implements Shootable, Damageable {
 	RigidBody3 body;
 	List<Cannon> cannons;
 	boolean isShooting = false;
@@ -19,9 +17,10 @@ public class Ship extends Cylinder implements Shootable, Damageable {
 	Shader shader;
 
 	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ, Shader shader,
-			int healthbarID) {
-		super(x, y, z, 1, 1, 60);
-		body = new RigidBody3(PhysicsShapeCreator.create(this));
+			int healthbarID, ShapedObject3 shape, RigidBody3 body) {
+		super(x, y, z);
+		this.copy(shape);
+		this.body = body;
 		body.setMass(1);
 		body.setInertia(new Quaternionf());
 		body.setRestitution(0);

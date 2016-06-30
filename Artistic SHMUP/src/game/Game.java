@@ -18,6 +18,7 @@ import input.KeyInput;
 import input.MouseInput;
 import integration.VerletIntegration;
 import loader.FontLoader;
+import loader.ModelLoader;
 import loader.ShaderLoader;
 import loader.TextureLoader;
 import manifold.CollisionManifold;
@@ -50,6 +51,7 @@ import shape.Box;
 import shape.MarchingSquaresGenerator;
 import shape.Sphere;
 import shape2d.Quad;
+import shapedata.CylinderData;
 import sound.NullSoundEnvironment;
 import texture.FramebufferObject;
 import texture.Texture;
@@ -315,7 +317,11 @@ public class Game extends StandardGame {
 
 		generateLevel(100, 10);
 
-		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader);
+		float xzscale = 1.3f;
+		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader,
+				ModelLoader.load("res/models/playerbase.obj"),
+				new RigidBody3(PhysicsShapeCreator.create(new CylinderData(0, 0, 0, xzscale * 0.6f, 1))));
+		player.scale(xzscale, 1, xzscale);
 		space.addRigidBody(player, player.getBody());
 		playercolorshader.addObject(player);
 		shooters.add(player);
