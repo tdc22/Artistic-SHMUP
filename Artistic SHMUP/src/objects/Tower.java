@@ -20,7 +20,7 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 	Shader shader;
 	final Vector3f up = new Vector3f(0, 1, 0);
 
-	public Tower(float x, float y, float z, Shader shader, int healthbarID) {
+	public Tower(float x, float y, float z, Shader shader, int healthbarID, int starthealth) {
 		super(x, y, z, 1, 1, 36);
 		body = new RigidBody3(PhysicsShapeCreator.create(this));
 		body.setMass(1);
@@ -31,7 +31,7 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 
 		towerfront = QuatMath.transform(this.getRotation(), front);
 		this.shader = shader;
-		maxhealth = 100;
+		maxhealth = starthealth;
 		health = maxhealth;
 		cannons = new ArrayList<Cannon>();
 		this.healthbarID = healthbarID;

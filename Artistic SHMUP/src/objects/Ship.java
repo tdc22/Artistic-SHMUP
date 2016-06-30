@@ -7,10 +7,10 @@ import math.QuatMath;
 import physics.PhysicsShapeCreator;
 import quaternion.Quaternionf;
 import shader.Shader;
-import shape.Box;
+import shape.Cylinder;
 import vector.Vector3f;
 
-public class Ship extends Box implements Shootable, Damageable {
+public class Ship extends Cylinder implements Shootable, Damageable {
 	RigidBody3 body;
 	List<Cannon> cannons;
 	boolean isShooting = false;
@@ -20,7 +20,7 @@ public class Ship extends Box implements Shootable, Damageable {
 
 	public Ship(float x, float y, float z, float halfsizeX, float halfsizeY, float halfsizeZ, Shader shader,
 			int healthbarID) {
-		super(x, y, z, halfsizeX, halfsizeY, halfsizeZ);
+		super(x, y, z, 1, 1, 60);
 		body = new RigidBody3(PhysicsShapeCreator.create(this));
 		body.setMass(1);
 		body.setInertia(new Quaternionf());

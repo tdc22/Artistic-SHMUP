@@ -354,7 +354,7 @@ public class Game extends StandardGame {
 	}
 
 	private void addTower(float x, float y, float z) {
-		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleObject().getVertices().size() / 4);
+		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleObject().getVertices().size() / 4, 50);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get((int) (Math.random() * shotColorShaders.size())), shotgeometry,
@@ -530,20 +530,6 @@ public class Game extends StandardGame {
 						if (damaged.getHealthbarID() == -1) {
 							healthbar.scaleTo(damaged.getHealth() / 100f, 1);
 							healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
-							if (damaged.getHealth() <= 0) {
-								int halfLevelSizeX = levelsizeX / 2;
-								int halfLevelSizeZ = levelsizeZ / 2;
-								Vector3f b = new Vector3f(cam.getTranslation());
-								b.scale(0.4f);
-								Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
-								Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
-								deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
-								Quaternionf lookdown = new Quaternionf();
-								lookdown.rotate(-90, new Vector3f(1, 0, 0));
-								deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
-										lookdown);
-								playerAlive = false;
-							}
 						} else {
 							lifebars.removeParticle(damaged.getHealthbarID());
 							damaged.setHealthbarID(lifebars.addParticle(
@@ -559,7 +545,19 @@ public class Game extends StandardGame {
 							damaged.getShader().removeObject(damaged.getShapedObject());
 							damaged.getShapedObject().delete();
 							if (damaged.getHealthbarID() == -1) {
-
+								int halfLevelSizeX = levelsizeX / 2;
+								int halfLevelSizeZ = levelsizeZ / 2;
+								Vector3f b = new Vector3f(cam.getTranslation());
+								b.scale(0.4f);
+								Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
+								Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
+								deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
+								Quaternionf lookdown = new Quaternionf();
+								lookdown.rotate(-90, new Vector3f(1, 0, 0));
+								deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
+										lookdown);
+								playerAlive = false;
+								removeAllEnemies();
 							} else {
 								lifebars.removeParticle(damaged.getHealthbarID());
 							}
@@ -620,6 +618,17 @@ public class Game extends StandardGame {
 
 	private int calculateSplashGridZ(int z) {
 		return z / (int) (levelsizeZ / (float) splashSubdivision);
+	}
+
+	private void removeAllEnemies() {
+		for (Damageable damaged : targets) {
+			shooters.remove(damaged.getShooter());
+			space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
+			damaged.getShader().removeObject(damaged.getShapedObject());
+			damaged.getShapedObject().delete();
+			lifebars.removeParticle(damaged.getHealthbarID());
+		}
+		targets.clear();
 	}
 
 	List<Vector2f> affectedSplashGrids = new ArrayList<Vector2f>();
