@@ -215,7 +215,6 @@ public class Game extends StandardGame {
 		currentSplashTextures = new Texture[splashSubdivision][splashSubdivision];
 		float halfboxsizeX = levelsizeX / (float) (splashSubdivision * 2);
 		float halfboxsizeZ = levelsizeZ / (float) (splashSubdivision * 2);
-		System.out.println("hbs " + 2 * halfboxsizeX + "; " + 2 * halfboxsizeZ);
 		groundboxes = new Box[splashSubdivision][splashSubdivision];
 
 		for (int x = 0; x < splashSubdivision; x++) {
@@ -261,10 +260,25 @@ public class Game extends StandardGame {
 			}
 		}
 
-		addStaticBox(halflevelsizeX, 0, 0.5f, halflevelsizeX, 1, 0.5f);
-		addStaticBox(halflevelsizeX, 0, levelsizeZ - 0.5f, halflevelsizeX, 1, 0.5f);
-		addStaticBox(0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
-		addStaticBox(levelsizeX - 0.5f, 0, halflevelsizeZ, 0.5f, 1, halflevelsizeZ);
+		float delta = 0.01f;
+		addStaticBox(halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
+		addStaticBox(1f, 0, halfboxsizeZ + 1f, 1f, 1, halfboxsizeZ - 1f - delta);
+		float boxsizeX = halfboxsizeX * 2;
+		float boxsizeZ = halfboxsizeZ * 2;
+		for (int i = 1; i < splashSubdivision - 1; i++) {
+			addStaticBox(i * boxsizeX + halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
+			addStaticBox(1f, 0, i * boxsizeZ + halfboxsizeZ, 1f, 1, halfboxsizeZ - delta);
+			addStaticBox(i * boxsizeX + halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta);
+			addStaticBox(levelsizeX - 1f, 0, i * boxsizeZ + halfboxsizeZ, 1f - delta, 1, halfboxsizeZ - delta);
+		}
+		if (splashSubdivision > 1) {
+			addStaticBox(levelsizeX - halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
+			addStaticBox(1f, 0, levelsizeZ - halfboxsizeZ, 1f, 1, halfboxsizeZ - delta);
+			addStaticBox(halfboxsizeX + 1f, 0, levelsizeZ - 1f, halfboxsizeX - 1f - delta, 1, 1f - delta);
+			addStaticBox(levelsizeX - 1f, 0, halfboxsizeZ + 1f, 1f - delta, 1, halfboxsizeZ - 1f - delta);
+			addStaticBox(levelsizeX - halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta);
+			addStaticBox(levelsizeX - 1f, 0, levelsizeZ - halfboxsizeZ - 1f, 1f - delta, 1, halfboxsizeZ - 1f - delta);
+		}
 
 		Box frame1 = new Box(halflevelsizeX, 0, -3, halflevelsizeX + 6, 1, 3);
 		Box frame2 = new Box(halflevelsizeX, 0, levelsizeZ + 3, halflevelsizeX + 6, 1, 3);
@@ -355,8 +369,8 @@ public class Game extends StandardGame {
 	}
 
 	public void generateLevel(int numboxes, int numtowers) {
-		int gridsizeX = levelsizeX / 2 - 1;
-		int gridsizeZ = levelsizeZ / 2 - 1;
+		int gridsizeX = levelsizeX / 2 - 2;
+		int gridsizeZ = levelsizeZ / 2 - 2;
 		boolean[][] levelgrid = new boolean[gridsizeX][gridsizeZ];
 
 		for (int x = 0; x < gridsizeX; x++) {
@@ -366,14 +380,14 @@ public class Game extends StandardGame {
 		}
 		levelgrid[gridsizeX / 2][gridsizeZ / 2] = true; // player
 
-		int sizeX = 1;
-		int sizeZ = 1;
+		float sizeX = 0.999f;
+		float sizeZ = 0.999f;
 		for (int i = 0; i < numboxes; i++) {
 			int posX = (int) (Math.random() * gridsizeX);
 			int posZ = (int) (Math.random() * gridsizeZ);
 			if (!levelgrid[posX][posZ]) {
 				levelgrid[posX][posZ] = true;
-				addStaticBox(posX * 2 + 2, 0, posZ * 2 + 2, sizeX, 1, sizeZ);
+				addStaticBox(posX * 2 + 3, 0, posZ * 2 + 3, sizeX, 1, sizeZ);
 			} else {
 				i--;
 			}
@@ -383,7 +397,7 @@ public class Game extends StandardGame {
 			int posZ = (int) (Math.random() * gridsizeZ);
 			if (!levelgrid[posX][posZ]) {
 				levelgrid[posX][posZ] = true;
-				addTower(posX * 2 + 2, 0, posZ * 2 + 2);
+				addTower(posX * 2 + 3, 0, posZ * 2 + 3);
 			} else {
 				i--;
 			}
@@ -567,7 +581,7 @@ public class Game extends StandardGame {
 					for (Vector2f grids : getAffectedSplashGrids(a)) {
 						int x = (int) grids.x;
 						int z = (int) grids.y;
-						if (x >= 0 && z >= 0) {
+						if (x >= 0 && z >= 0 && x < splashSubdivision && z < splashSubdivision) {
 							newSplashFramebuffer[x][z].updateTexture();
 							splashGround(x, z);
 						}
@@ -619,15 +633,6 @@ public class Game extends StandardGame {
 		int minZ = calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
 		int maxX = calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
 		int maxZ = calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
-
-		if (minX >= splashSubdivision)
-			minX--;
-		if (minZ >= splashSubdivision)
-			minZ--;
-		if (maxX >= splashSubdivision)
-			maxX--;
-		if (maxZ >= splashSubdivision)
-			maxZ--;
 
 		affectedSplashGrids.add(new Vector2f(minX, minZ));
 		if (maxX > minX) {
