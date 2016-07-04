@@ -15,7 +15,8 @@ void main(void) {
 	
 	out_Color = texColor;
 	if(passPosition.y < 0)
-		out_Color.rgb = sqrt(mix(texColor.rgb * texColor.rgb, bottomColor * bottomColor, -passPosition.y/2));
+		out_Color.rgb += passPosition.y * 0.3 * vec3(1, 1, 1);
+		//out_Color.rgb = sqrt(mix(texColor.rgb * texColor.rgb, bottomColor * bottomColor, -passPosition.y/2));
 	
 	// START TEST DEBUG
 	/*out_Color.r = passPosition.x / u_groundblocksizeX;

@@ -29,6 +29,7 @@ import objects.Camera2;
 import objects.CollisionShape3;
 import objects.Damageable;
 import objects.Enemy;
+import objects.LateUpdateable;
 import objects.Player;
 import objects.RigidBody;
 import objects.RigidBody3;
@@ -52,6 +53,7 @@ import shape.MarchingSquaresGenerator;
 import shape.Sphere;
 import shape2d.Quad;
 import shapedata.CylinderData;
+import shapedata.SphereData;
 import sound.NullSoundEnvironment;
 import texture.FramebufferObject;
 import texture.Texture;
@@ -68,6 +70,7 @@ public class Game extends StandardGame {
 	InputEvent eventEsc, eventUp, eventDown, eventLeft, eventRight, eventShoot;
 	PhysicsSpace space;
 	Player player;
+	Vector3f playerspawn;
 	Shader defaultshader;
 	RigidBody3 testrb;
 	boolean isPaused = false;
@@ -120,6 +123,7 @@ public class Game extends StandardGame {
 	List<Shootable> shooters;
 	List<Damageable> targets;
 	List<Enemy> enemies;
+	List<LateUpdateable> lateupdates;
 	List<Shot> shots;
 	List<Shader> shotColorShaders;
 
@@ -300,6 +304,7 @@ public class Game extends StandardGame {
 		shooters = new ArrayList<Shootable>();
 		targets = new ArrayList<Damageable>();
 		enemies = new ArrayList<Enemy>();
+		lateupdates = new ArrayList<LateUpdateable>();
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
@@ -318,14 +323,21 @@ public class Game extends StandardGame {
 		generateLevel(100, 10);
 
 		float xzscale = 1.3f;
-		player = new Player(halflevelsizeX, 0, halflevelsizeZ, playercolorshader,
+		playerspawn = new Vector3f(halflevelsizeX, 0, halflevelsizeZ);
+		player = new Player(playerspawn.x, playerspawn.y, playerspawn.z, playercolorshader,
 				ModelLoader.load("res/models/playerbase.obj"),
-				new RigidBody3(PhysicsShapeCreator.create(new CylinderData(0, 0, 0, xzscale * 0.6f, 1))));
+				new RigidBody3(PhysicsShapeCreator.create(new CylinderData(0, 0, 0, xzscale * 0.6f, 1))),
+				new Sphere(playerspawn.x, 2, playerspawn.z, 0.3f, 32, 32),
+				new RigidBody3(PhysicsShapeCreator.create(new SphereData(0, 0, 0, 0.3f))));
 		player.scale(xzscale, 1, xzscale);
 		space.addRigidBody(player, player.getBody());
-		playercolorshader.addObject(player);
+		space.addRigidBody(player.getHeadShapedObject(), player.getHeadBody());
+		space.addCollisionFilter(player.getBody(), player.getHeadBody());
+		playercolorshader.addObject(player.getShapedObject());
+		playercolorshader.addObject(player.getHeadShapedObject());
 		shooters.add(player);
 		targets.add(player);
+		lateupdates.add(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
@@ -516,6 +528,10 @@ public class Game extends StandardGame {
 
 			space.update(delta);
 			physicsdebug.update();
+
+			for (LateUpdateable lateupdate : lateupdates) {
+				lateupdate.lateUpdate(delta);
+			}
 
 			for (int i = 0; i < shots.size(); i++) {
 				Shot shot = shots.get(i);
