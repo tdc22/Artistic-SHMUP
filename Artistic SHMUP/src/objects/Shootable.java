@@ -7,7 +7,7 @@ public interface Shootable {
 
 	final Vector3f front = new Vector3f(0, 0, 1);
 
-	public Vector3f getTranslation();
+	public Vector3f getTranslationForCannons();
 
 	public Quaternionf getRotation();
 

@@ -3,7 +3,7 @@ package objects;
 import shader.Shader;
 
 public class Player extends Ship {
-	final float acceleration = 20f;
+	final float acceleration = 30f;
 	final float maxspeed = 20f;
 	final float maxspeedSqared = maxspeed * maxspeed;
 

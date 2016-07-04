@@ -5,13 +5,6 @@ import java.util.List;
 
 import broadphase.SAP;
 import collisionshape.BoxShape;
-import curves.BezierCurve3;
-import curves.SquadCurve3;
-import display.DisplayMode;
-import display.GLDisplay;
-import display.PixelFormat;
-import display.VideoSettings;
-import gui.Font;
 import input.Input;
 import input.InputEvent;
 import input.KeyInput;
@@ -44,35 +37,29 @@ import physics.PhysicsShapeCreator;
 import physics.PhysicsSpace;
 import positionalcorrection.ProjectionCorrection;
 import quaternion.Complexf;
-import quaternion.Quaternionf;
 import resolution.SimpleLinearImpulseResolution;
 import shader.PostProcessingShader;
 import shader.Shader;
 import shape.Box;
-import shape.MarchingSquaresGenerator;
 import shape.Sphere;
 import shape2d.Quad;
 import shapedata.CylinderData;
 import shapedata.SphereData;
-import sound.NullSoundEnvironment;
 import texture.FramebufferObject;
 import texture.Texture;
-import utils.Debugger;
-import utils.DefaultValues;
 import utils.ProjectionHelper;
 import vector.Vector2f;
 import vector.Vector3f;
 import vector.Vector4f;
 
-public class Game extends StandardGame {
-	Debugger debugger;
+public class Game implements WindowContent {
+	MainWindow game;
 	PhysicsDebug physicsdebug;
 	InputEvent eventEsc, eventUp, eventDown, eventLeft, eventRight, eventShoot;
 	PhysicsSpace space;
 	Player player;
 	Vector3f playerspawn;
 	Shader defaultshader;
-	RigidBody3 testrb;
 	boolean isPaused = false;
 
 	final float mouseSensitivity = -0.1f; // negative sensitivity = not inverted
@@ -85,8 +72,10 @@ public class Game extends StandardGame {
 	final Vector3f cameraOffset = new Vector3f(0, 10, 10);
 	Vector3f transformedCameraOffset = new Vector3f();
 
-	final int levelsizeX = 160; // mod 2 = 0 !!!
-	final int levelsizeZ = 160;
+	final int levelsizeX; // mod 2 = 0 !!!
+	final int levelsizeZ;
+	final int halflevelsizeX;
+	final int halflevelsizeZ;
 	final int splashResolution = 512; // power of 2 !!!
 	final int splashSubdivision = 4;
 
@@ -97,8 +86,7 @@ public class Game extends StandardGame {
 	final int healthbarMargin = 10;
 	final int healthbarBorder = 1;
 
-	boolean playerAlive = true;
-	float deathtimer = 0;
+	boolean isActive = true;
 
 	Shader newSplashShader, blackcolorshader;
 	Texture[] splashtextures;
@@ -113,8 +101,6 @@ public class Game extends StandardGame {
 	Box[][] groundboxes;
 
 	Quad healthbar;
-	BezierCurve3 deathcamCurve;
-	SquadCurve3 deathcamRotationCurve;
 	SimpleParticleSystem lifebars;
 	final Vector2f enemyLifebarSize = new Vector2f(1, 0.3);
 
@@ -127,16 +113,18 @@ public class Game extends StandardGame {
 	List<Shot> shots;
 	List<Shader> shotColorShaders;
 
+	public Game(MainWindow game, int levelsizeX, int levelsizeZ) {
+		this.game = game;
+		this.levelsizeX = levelsizeX;
+		this.levelsizeZ = levelsizeZ;
+		halflevelsizeX = levelsizeX / 2;
+		halflevelsizeZ = levelsizeZ / 2;
+	}
+
 	@Override
 	public void init() {
-		initDisplay(new GLDisplay(),
-				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 20, 1280, 720, "Artful SHMUP", false,
-						DefaultValues.DEFAULT_DISPLAY_RESIZEABLE, DefaultValues.DEFAULT_DISPLAY_FULLSCREEN),
-				new PixelFormat(), new VideoSettings(1280, 720), new NullSoundEnvironment());
-		display.bindMouse();
-		cam.setFlyCam(false);
-		setRendered(true, false, true);
-		layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
+		game.display.bindMouse();
+		game.layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
 				levelsizeZ / (float) splashSubdivision, 0, -1, 1));
 
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()),
@@ -147,32 +135,31 @@ public class Game extends StandardGame {
 		int defaultshaderID = ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert",
 				"res/shaders/defaultshader.frag");
 		defaultshader = new Shader(defaultshaderID);
-		addShader(defaultshader);
+		game.addShader(defaultshader);
 		Shader defaultshaderInterface = new Shader(defaultshaderID);
-		addShaderInterface(defaultshaderInterface);
+		game.addShaderInterface(defaultshaderInterface);
 
 		int colorshaderprogram = ShaderLoader.loadShaderFromFile("res/shaders/colorshader.vert",
 				"res/shaders/colorshader.frag");
 		Shader playercolorshader = new Shader(colorshaderprogram);
 		playercolorshader.addArgument("u_color", new Vector4f(0.75, 0.75, 0.75, 1));
-		addShader(playercolorshader);
+		game.addShader(playercolorshader);
 		blackcolorshader = new Shader(colorshaderprogram);
 		blackcolorshader.addArgument("u_color", new Vector4f(0, 0, 0, 1));
-		addShader(blackcolorshader);
+		game.addShader(blackcolorshader);
 		Shader redcolorshaderInterface = new Shader(colorshaderprogram);
 		redcolorshaderInterface.addArgument("u_color", new Vector4f(1, 0, 0, 1));
-		addShaderInterface(redcolorshaderInterface);
+		game.addShaderInterface(redcolorshaderInterface);
 
-		Font font = FontLoader.loadFont("res/fonts/DejaVuSans.ttf");
-		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface, font, cam);
-		physicsdebug = new PhysicsDebug(inputs, font, space, defaultshader);
+		physicsdebug = new PhysicsDebug(game.inputs, FontLoader.loadFont("res/fonts/DejaVuSans.ttf"), space,
+				defaultshader);
 
 		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
 				"res/shaders/textureshader.frag");
 
 		Shader frameShader = new Shader(textureshaderID);
-		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood1.png")));
-		addShader(frameShader);
+		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood.png")));
+		game.addShader(frameShader);
 
 		splashtextures = new Texture[5];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
@@ -185,11 +172,11 @@ public class Game extends StandardGame {
 				ShaderLoader.loadShaderFromFile("res/shaders/splashshader.vert", "res/shaders/splashshader.frag"));
 		newSplashShader.addArgument("u_texture", splashtextures[0]);
 		newSplashShader.addArgument("u_color", new Vector4f(0, 1, 0, 1));
-		addShader2d(newSplashShader);
+		game.addShader2d(newSplashShader);
 
 		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
 				"res/shaders/healthbarshader.frag"));
-		addShader(healthbarshader);
+		game.addShader(healthbarshader);
 
 		Quad healthbarBackground = new Quad(healthbarMargin + healthbarBorder + healthbarHalfSizeX,
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarBorder + healthbarHalfSizeX,
@@ -199,12 +186,10 @@ public class Game extends StandardGame {
 				healthbarMargin + healthbarBorder + healthbarHalfSizeY, healthbarHalfSizeX, healthbarHalfSizeY);
 		redcolorshaderInterface.addObject(healthbar);
 
-		lifebars = new SimpleParticleSystem(new Vector3f(), cam, false);
+		lifebars = new SimpleParticleSystem(new Vector3f(), game.cam, false);
 		lifebars.getParticleObject().setRenderHints(true, true, false);
 		healthbarshader.addObject(lifebars);
 
-		float halflevelsizeX = levelsizeX / 2f;
-		float halflevelsizeZ = levelsizeZ / 2f;
 		groundshape = new BoxShape(halflevelsizeX, -2f, halflevelsizeZ, halflevelsizeX, 1, halflevelsizeZ);
 		RigidBody3 rbground = new RigidBody3(groundshape);
 		rbground.translate(halflevelsizeX, -2f, halflevelsizeZ);
@@ -226,12 +211,12 @@ public class Game extends StandardGame {
 		for (int x = 0; x < splashSubdivision; x++) {
 			for (int z = 0; z < splashSubdivision; z++) {
 				Vector2f campos = new Vector2f(2 * halfboxsizeX * x, 2 * halfboxsizeZ * z);
-				FramebufferObject groundfbo = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+				FramebufferObject groundfbo = new FramebufferObject(game.layer2d, splashResolution, splashResolution, 0,
 						new Camera2(campos));
 				splashGroundFramebuffers[x][z] = groundfbo;
-				splashGroundFramebufferHelpers[x][z] = new FramebufferObject(layer2d, splashResolution,
+				splashGroundFramebufferHelpers[x][z] = new FramebufferObject(game.layer2d, splashResolution,
 						splashResolution, 0, new Camera2(campos));
-				newSplashFramebuffer[x][z] = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+				newSplashFramebuffer[x][z] = new FramebufferObject(game.layer2d, splashResolution, splashResolution, 0,
 						new Camera2(campos));
 				splashGroundFramebufferFirst[x][z] = true;
 
@@ -242,7 +227,7 @@ public class Game extends StandardGame {
 				levelObjectShader.addArgument("u_texture", currentSplashTextures[x][z]);
 				levelObjectShader.addArgument("u_groundblocksizeX", (int) (2 * halfboxsizeX));
 				levelObjectShader.addArgument("u_groundblocksizeZ", (int) (2 * halfboxsizeZ));
-				addShader(levelObjectShader);
+				game.addShader(levelObjectShader);
 				splashObjectShaders[x][z] = levelObjectShader;
 
 				Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
@@ -251,12 +236,12 @@ public class Game extends StandardGame {
 				combShader.addArgument("u_depthTexture", splashGroundFramebuffers[x][z].getDepthTexture());
 				combShader.addArgument("u_splashTexture", newSplashFramebuffer[x][z].getColorTexture());
 				PostProcessingShader combinationShader = new PostProcessingShader(combShader, 1);
-				combinationShader.getShader().addObject(screen);
+				combinationShader.getShader().addObject(game.screen);
 				splashCombinationShaders[x][z] = combinationShader;
 
 				Shader groundshader = new Shader(textureshaderID);
 				groundshader.addArgument("u_texture", currentSplashTextures[x][z]);
-				addShader(groundshader);
+				game.addShader(groundshader);
 				splashGroundShaders[x][z] = groundshader;
 
 				Box groundbox = new Box(halfboxsizeX + (2 * halfboxsizeX * x), -2f,
@@ -317,34 +302,54 @@ public class Game extends StandardGame {
 		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 1, 1)));
 		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 1, 1)));
 		for (Shader s : shotColorShaders) {
-			addShader(s);
+			game.addShader(s);
 		}
+
+		Shader headshader = new Shader(
+				ShaderLoader.loadShaderFromFile("res/shaders/phongshader.vert", "res/shaders/phongshader.frag"));
+		headshader.addArgumentName("u_lightpos");
+		headshader.addArgument(new Vector3f(0, 0, 10));
+		headshader.addArgumentName("u_ambient");
+		headshader.addArgument(new Vector3f(0.2f, 0.2f, 0.2f));
+		headshader.addArgumentName("u_diffuse");
+		headshader.addArgument(new Vector3f(0.5f, 0.5f, 0.5f));
+		headshader.addArgumentName("u_shininess");
+		headshader.addArgument(10f);
+		game.addShader(headshader);
 
 		generateLevel(100, 10);
 
 		float xzscale = 1.3f;
 		playerspawn = new Vector3f(halflevelsizeX, 0, halflevelsizeZ);
-		player = new Player(playerspawn.x, playerspawn.y, playerspawn.z, playercolorshader,
-				ModelLoader.load("res/models/playerbase.obj"),
+		ShapedObject3 bodyshape = ModelLoader.load("res/models/playerbase.obj");
+		bodyshape.translateTo(playerspawn.x, 0, playerspawn.z);
+		bodyshape.scale(1, 0.8f, 1);
+		player = new Player(playerspawn.x, playerspawn.y, playerspawn.z, headshader, bodyshape,
 				new RigidBody3(PhysicsShapeCreator.create(new CylinderData(0, 0, 0, xzscale * 0.6f, 1))),
-				new Sphere(playerspawn.x, 2, playerspawn.z, 0.3f, 32, 32),
+				new Sphere(playerspawn.x, 1f, playerspawn.z, 0.3f, 32, 32),
 				new RigidBody3(PhysicsShapeCreator.create(new SphereData(0, 0, 0, 0.3f))));
 		player.scale(xzscale, 1, xzscale);
 		space.addRigidBody(player, player.getBody());
 		space.addRigidBody(player.getHeadShapedObject(), player.getHeadBody());
 		space.addCollisionFilter(player.getBody(), player.getHeadBody());
-		playercolorshader.addObject(player.getShapedObject());
-		playercolorshader.addObject(player.getHeadShapedObject());
+		player.getShapedObject().setRenderHints(false, false, true);
+		player.getHeadShapedObject().setRenderHints(false, false, true);
+		headshader.addObject(player.getShapedObject());
+		headshader.addObject(player.getHeadShapedObject());
 		shooters.add(player);
 		targets.add(player);
 		lateupdates.add(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
-		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0.8f, 0, -1),
-				new Vector3f(-0.4472136, 0, 0.8944272), shotColorShaders.get(1), shotgeometry, shotcollisionshape));
-		player.addCannon(new StandardCannon(this, space, player, new Vector3f(-0.8f, 0, -1),
-				new Vector3f(0.4472136, 0, 0.8944272), shotColorShaders.get(2), shotgeometry, shotcollisionshape));
+		/*
+		 * player.addCannon(new StandardCannon(this, space, player, new
+		 * Vector3f(0.8f, 0, -1), new Vector3f(-0.4472136, 0, 0.8944272),
+		 * shotColorShaders.get(1), shotgeometry, shotcollisionshape));
+		 * player.addCannon(new StandardCannon(this, space, player, new
+		 * Vector3f(-0.8f, 0, -1), new Vector3f(0.4472136, 0, 0.8944272),
+		 * shotColorShaders.get(2), shotgeometry, shotcollisionshape));
+		 */
 
 		setupInputs();
 		updatePlayerRotationVariables();
@@ -420,20 +425,10 @@ public class Game extends StandardGame {
 				i--;
 			}
 		}
-
-		boolean[][] testarray = { { false, false, false, false, false }, { false, false, true, false, false },
-				{ false, true, true, true, false }, { false, false, true, false, false },
-				{ false, false, false, false, false }, };
-		ShapedObject3 testobject = MarchingSquaresGenerator.generate(testarray, 1f);
-		testrb = new RigidBody3(PhysicsShapeCreator.createHull(testobject));
-		testrb.setMass(0);
-		space.addRigidBody(testobject, testrb);
-		testobject.translateTo(-0, 0, -6);
-		defaultshader.addObject(testobject);
 	}
 
 	public void setupInputs() {
-		inputs.getInputEvents().remove("game_close");
+		game.inputs.getInputEvents().remove("game_close");
 
 		Input inputKeyEscape = new Input(Input.KEYBOARD_EVENT, "Escape", KeyInput.KEY_PRESSED);
 		Input inputKeyUp = new Input(Input.KEYBOARD_EVENT, "W", KeyInput.KEY_DOWN);
@@ -449,25 +444,23 @@ public class Game extends StandardGame {
 		eventRight = new InputEvent("Right", inputKeyRight);
 		eventShoot = new InputEvent("Shoot", inputMouseLeft);
 
-		inputs.addEvent(eventEsc);
-		inputs.addEvent(eventUp);
-		inputs.addEvent(eventDown);
-		inputs.addEvent(eventLeft);
-		inputs.addEvent(eventRight);
-		inputs.addEvent(eventShoot);
+		game.inputs.addEvent(eventEsc);
+		game.inputs.addEvent(eventUp);
+		game.inputs.addEvent(eventDown);
+		game.inputs.addEvent(eventLeft);
+		game.inputs.addEvent(eventRight);
+		game.inputs.addEvent(eventShoot);
 	}
 
 	@Override
 	public void update(int delta) {
-		debugger.update(fps, 0, 0);
-
 		move.set(0, 0);
 		if (eventEsc.isActive()) {
 			isPaused = !isPaused;
 			if (isPaused) {
-				display.unbindMouse();
+				game.display.unbindMouse();
 			} else {
-				display.bindMouse();
+				game.display.bindMouse();
 			}
 		}
 		if (!isPaused) {
@@ -484,7 +477,7 @@ public class Game extends StandardGame {
 				move.x += 1;
 			}
 
-			float mouseX = inputs.getMouseX();
+			float mouseX = game.inputs.getMouseX();
 			if (mouseX > 0 || mouseX < 0) {
 				player.getBody().rotate(0, mouseX * mouseSensitivity, 0);
 				updatePlayerRotationVariables();
@@ -568,12 +561,11 @@ public class Game extends StandardGame {
 							damaged.getShader().removeObject(damaged.getShapedObject());
 							damaged.getShapedObject().delete();
 							if (damaged.getHealthbarID() == -1) {
-								zoomOut();
+								exitGame();
 							} else {
 								lifebars.removeParticle(damaged.getHealthbarID());
-								System.out.println(enemies.size() + "; " + enemies.isEmpty());
 								if (enemies.isEmpty()) {
-									zoomOut();
+									exitGame();
 								}
 							}
 						}
@@ -611,35 +603,17 @@ public class Game extends StandardGame {
 				}
 			}
 
-			if (playerAlive) {
-				cam.translateTo(player.getTranslation());
-				cam.translate(transformedCameraOffset);
-				cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
-			} else {
-				if (deathtimer < 1)
-					deathtimer += delta * 0.0002;
-				else
-					deathtimer = 1;
-				cam.translateTo(deathcamCurve.getPoint(deathtimer));
-				cam.rotateTo(deathcamRotationCurve.getRotation(deathtimer));
-			}
+			game.cam.translateTo(player.getTranslation());
+			game.cam.translate(transformedCameraOffset);
+			game.cam.rotateTo((float) Math.toDegrees(playerrotation.angle()), -45);
 			lifebars.updateParticles(0, 1000);
 		}
 	}
 
-	public void zoomOut() {
-		int halfLevelSizeX = levelsizeX / 2;
-		int halfLevelSizeZ = levelsizeZ / 2;
-		Vector3f b = new Vector3f(cam.getTranslation());
-		b.scale(0.4f);
-		Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
-		Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
-		deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
-		Quaternionf lookdown = new Quaternionf();
-		lookdown.rotate(-90, new Vector3f(1, 0, 0));
-		deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown, lookdown);
-		playerAlive = false;
+	public void exitGame() {
+		isActive = false;
 		removeAllEnemies();
+		game.zoomOut(halflevelsizeX, halflevelsizeZ);
 	}
 
 	private int calculateSplashGridX(int x) {
@@ -720,19 +694,28 @@ public class Game extends StandardGame {
 
 	@Override
 	public void render() {
-		debugger.begin();
-		render3dLayer();
+		game.render3dLayer();
 		physicsdebug.render3d();
 	}
 
 	@Override
-	public void render2d() {
+	public void renderInterface() {
+		game.renderInterfaceLayer();
+	}
+
+	@Override
+	public void delete() {
+		// TODO Auto-generated method stub
 
 	}
 
 	@Override
-	public void renderInterface() {
-		renderInterfaceLayer();
-		debugger.end();
+	public boolean isActive() {
+		return isActive;
+	}
+
+	@Override
+	public void setActive(boolean active) {
+		isActive = active;
 	}
 }

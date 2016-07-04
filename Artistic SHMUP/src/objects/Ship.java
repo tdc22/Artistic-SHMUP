@@ -143,11 +143,14 @@ public class Ship extends GameObject3 implements Shootable, Damageable, LateUpda
 		rotationoffset += delta * 0.1;
 		if (rotationoffset >= 360)
 			rotationoffset %= 360;
-		shape.translateTo(getTranslation().x,
-				getTranslation().y + (float) Math.sin(Math.toRadians(rotationoffset)) * 0.3f + 0.3f,
-				getTranslation().z);
+		shape.translateTo(getTranslation().x, getTranslation().y, getTranslation().z);
 		Quaternionf rot = new Quaternionf(getRotation());
 		rot.rotate(rotationoffset, yAxis);
 		shape.rotateTo(rot);
+	}
+
+	@Override
+	public Vector3f getTranslationForCannons() {
+		return head.getTranslation();
 	}
 }

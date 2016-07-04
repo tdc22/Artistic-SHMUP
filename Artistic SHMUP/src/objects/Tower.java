@@ -18,6 +18,7 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 	Vector3f towerfront;
 	int maxhealth, health, healthbarID;
 	Shader shader;
+	Vector3f translationForCannons;
 	final Vector3f up = new Vector3f(0, 1, 0);
 
 	public Tower(float x, float y, float z, Shader shader, int healthbarID, int starthealth) {
@@ -35,6 +36,8 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 		health = maxhealth;
 		cannons = new ArrayList<Cannon>();
 		this.healthbarID = healthbarID;
+
+		translationForCannons = new Vector3f(getTranslation().x, getTranslation().y + 1, getTranslation().z);
 	}
 
 	public boolean isShooting() {
@@ -115,6 +118,11 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 	@Override
 	public void setHealthbarID(int healthbarID) {
 		this.healthbarID = healthbarID;
+	}
+
+	@Override
+	public Vector3f getTranslationForCannons() {
+		return translationForCannons;
 	}
 
 }
