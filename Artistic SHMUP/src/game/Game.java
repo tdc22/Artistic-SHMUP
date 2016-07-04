@@ -562,26 +562,19 @@ public class Game extends StandardGame {
 						}
 						if (damaged.getHealth() <= 0) {
 							targets.remove(damaged);
+							enemies.remove(damaged);
 							shooters.remove(damaged.getShooter());
 							space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 							damaged.getShader().removeObject(damaged.getShapedObject());
 							damaged.getShapedObject().delete();
 							if (damaged.getHealthbarID() == -1) {
-								int halfLevelSizeX = levelsizeX / 2;
-								int halfLevelSizeZ = levelsizeZ / 2;
-								Vector3f b = new Vector3f(cam.getTranslation());
-								b.scale(0.4f);
-								Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
-								Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
-								deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
-								Quaternionf lookdown = new Quaternionf();
-								lookdown.rotate(-90, new Vector3f(1, 0, 0));
-								deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown,
-										lookdown);
-								playerAlive = false;
-								removeAllEnemies();
+								zoomOut();
 							} else {
 								lifebars.removeParticle(damaged.getHealthbarID());
+								System.out.println(enemies.size() + "; " + enemies.isEmpty());
+								if (enemies.isEmpty()) {
+									zoomOut();
+								}
 							}
 						}
 					}
@@ -634,6 +627,21 @@ public class Game extends StandardGame {
 		}
 	}
 
+	public void zoomOut() {
+		int halfLevelSizeX = levelsizeX / 2;
+		int halfLevelSizeZ = levelsizeZ / 2;
+		Vector3f b = new Vector3f(cam.getTranslation());
+		b.scale(0.4f);
+		Vector3f d = new Vector3f(halfLevelSizeX, 100, halfLevelSizeZ);
+		Vector3f c = new Vector3f(halfLevelSizeX, 40, halfLevelSizeZ);
+		deathcamCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
+		Quaternionf lookdown = new Quaternionf();
+		lookdown.rotate(-90, new Vector3f(1, 0, 0));
+		deathcamRotationCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown, lookdown);
+		playerAlive = false;
+		removeAllEnemies();
+	}
+
 	private int calculateSplashGridX(int x) {
 		return x / (int) (levelsizeX / (float) splashSubdivision);
 	}
@@ -648,7 +656,8 @@ public class Game extends StandardGame {
 			space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 			damaged.getShader().removeObject(damaged.getShapedObject());
 			damaged.getShapedObject().delete();
-			lifebars.removeParticle(damaged.getHealthbarID());
+			if (damaged.getHealthbarID() != -1)
+				lifebars.removeParticle(damaged.getHealthbarID());
 		}
 		targets.clear();
 	}
