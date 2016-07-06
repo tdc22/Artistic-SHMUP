@@ -18,7 +18,6 @@ import manifold.CollisionManifold;
 import manifold.SimpleManifoldManager;
 import narrowphase.EPA;
 import narrowphase.GJK;
-import objects.Camera2;
 import objects.CollisionShape3;
 import objects.Damageable;
 import objects.Enemy;
@@ -38,16 +37,13 @@ import physics.PhysicsSpace;
 import positionalcorrection.ProjectionCorrection;
 import quaternion.Complexf;
 import resolution.SimpleLinearImpulseResolution;
-import shader.PostProcessingShader;
 import shader.Shader;
 import shape.Box;
 import shape.Sphere;
 import shape2d.Quad;
 import shapedata.CylinderData;
 import shapedata.SphereData;
-import texture.FramebufferObject;
 import texture.Texture;
-import utils.ProjectionHelper;
 import vector.Vector2f;
 import vector.Vector3f;
 import vector.Vector4f;
@@ -59,7 +55,7 @@ public class Game implements WindowContent {
 	PhysicsSpace space;
 	Player player;
 	Vector3f playerspawn;
-	Shader defaultshader;
+	Shader defaultshader, playershader, defaultshaderInterface, redcolorshaderInterface, healthbarshader;
 	boolean isPaused = false;
 
 	final float mouseSensitivity = -0.1f; // negative sensitivity = not inverted
@@ -76,8 +72,8 @@ public class Game implements WindowContent {
 	final int levelsizeZ;
 	final int halflevelsizeX;
 	final int halflevelsizeZ;
-	final int splashResolution = 512; // power of 2 !!!
-	final int splashSubdivision = 4;
+	Vector3f playercolor;
+	boolean whitebackground;
 
 	BoxShape groundshape;
 
@@ -88,17 +84,8 @@ public class Game implements WindowContent {
 
 	boolean isActive = true;
 
-	Shader newSplashShader, blackcolorshader;
+	Shader blackcolorshader, playercolorshader;
 	Texture[] splashtextures;
-
-	Shader[][] splashGroundShaders, splashObjectShaders;
-	FramebufferObject[][] splashGroundFramebuffers;
-	FramebufferObject[][] splashGroundFramebufferHelpers;
-	FramebufferObject[][] newSplashFramebuffer;
-	PostProcessingShader[][] splashCombinationShaders;
-	boolean[][] splashGroundFramebufferFirst;
-	Texture[][] currentSplashTextures;
-	Box[][] groundboxes;
 
 	Quad healthbar;
 	SimpleParticleSystem lifebars;
@@ -111,21 +98,23 @@ public class Game implements WindowContent {
 	List<Enemy> enemies;
 	List<LateUpdateable> lateupdates;
 	List<Shot> shots;
+	Shader playerShotShader;
 	List<Shader> shotColorShaders;
+	List<Box> levelgeometry;
 
-	public Game(MainWindow game, int levelsizeX, int levelsizeZ) {
+	public Game(MainWindow game, int levelsizeX, int levelsizeZ, Vector3f playercolor, boolean whitebackground) {
 		this.game = game;
 		this.levelsizeX = levelsizeX;
 		this.levelsizeZ = levelsizeZ;
 		halflevelsizeX = levelsizeX / 2;
 		halflevelsizeZ = levelsizeZ / 2;
+		this.playercolor = playercolor;
+		this.whitebackground = whitebackground;
 	}
 
 	@Override
 	public void init() {
 		game.display.bindMouse();
-		game.layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
-				levelsizeZ / (float) splashSubdivision, 0, -1, 1));
 
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()),
 				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
@@ -136,30 +125,23 @@ public class Game implements WindowContent {
 				"res/shaders/defaultshader.frag");
 		defaultshader = new Shader(defaultshaderID);
 		game.addShader(defaultshader);
-		Shader defaultshaderInterface = new Shader(defaultshaderID);
+		defaultshaderInterface = new Shader(defaultshaderID);
 		game.addShaderInterface(defaultshaderInterface);
 
 		int colorshaderprogram = ShaderLoader.loadShaderFromFile("res/shaders/colorshader.vert",
 				"res/shaders/colorshader.frag");
-		Shader playercolorshader = new Shader(colorshaderprogram);
+		playercolorshader = new Shader(colorshaderprogram);
 		playercolorshader.addArgument("u_color", new Vector4f(0.75, 0.75, 0.75, 1));
 		game.addShader(playercolorshader);
 		blackcolorshader = new Shader(colorshaderprogram);
 		blackcolorshader.addArgument("u_color", new Vector4f(0, 0, 0, 1));
 		game.addShader(blackcolorshader);
-		Shader redcolorshaderInterface = new Shader(colorshaderprogram);
+		redcolorshaderInterface = new Shader(colorshaderprogram);
 		redcolorshaderInterface.addArgument("u_color", new Vector4f(1, 0, 0, 1));
 		game.addShaderInterface(redcolorshaderInterface);
 
 		physicsdebug = new PhysicsDebug(game.inputs, FontLoader.loadFont("res/fonts/DejaVuSans.ttf"), space,
 				defaultshader);
-
-		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
-				"res/shaders/textureshader.frag");
-
-		Shader frameShader = new Shader(textureshaderID);
-		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood.png")));
-		game.addShader(frameShader);
 
 		splashtextures = new Texture[5];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
@@ -168,13 +150,7 @@ public class Game implements WindowContent {
 		splashtextures[3] = new Texture(TextureLoader.loadTexture("res/textures/splash4.png"));
 		splashtextures[4] = new Texture(TextureLoader.loadTexture("res/textures/splash5.png"));
 
-		newSplashShader = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/splashshader.vert", "res/shaders/splashshader.frag"));
-		newSplashShader.addArgument("u_texture", splashtextures[0]);
-		newSplashShader.addArgument("u_color", new Vector4f(0, 1, 0, 1));
-		game.addShader2d(newSplashShader);
-
-		Shader healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
+		healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
 				"res/shaders/healthbarshader.frag"));
 		game.addShader(healthbarshader);
 
@@ -196,126 +172,89 @@ public class Game implements WindowContent {
 		rbground.setMass(0);
 		space.addRigidBody(rbground);
 
-		splashGroundFramebuffers = new FramebufferObject[splashSubdivision][splashSubdivision];
-		splashGroundFramebufferHelpers = new FramebufferObject[splashSubdivision][splashSubdivision];
-		newSplashFramebuffer = new FramebufferObject[splashSubdivision][splashSubdivision];
-		splashGroundFramebufferFirst = new boolean[splashSubdivision][splashSubdivision];
-		splashGroundShaders = new Shader[splashSubdivision][splashSubdivision];
-		splashObjectShaders = new Shader[splashSubdivision][splashSubdivision];
-		splashCombinationShaders = new PostProcessingShader[splashSubdivision][splashSubdivision];
-		currentSplashTextures = new Texture[splashSubdivision][splashSubdivision];
-		float halfboxsizeX = levelsizeX / (float) (splashSubdivision * 2);
-		float halfboxsizeZ = levelsizeZ / (float) (splashSubdivision * 2);
-		groundboxes = new Box[splashSubdivision][splashSubdivision];
-
-		for (int x = 0; x < splashSubdivision; x++) {
-			for (int z = 0; z < splashSubdivision; z++) {
-				Vector2f campos = new Vector2f(2 * halfboxsizeX * x, 2 * halfboxsizeZ * z);
-				FramebufferObject groundfbo = new FramebufferObject(game.layer2d, splashResolution, splashResolution, 0,
-						new Camera2(campos));
-				splashGroundFramebuffers[x][z] = groundfbo;
-				splashGroundFramebufferHelpers[x][z] = new FramebufferObject(game.layer2d, splashResolution,
-						splashResolution, 0, new Camera2(campos));
-				newSplashFramebuffer[x][z] = new FramebufferObject(game.layer2d, splashResolution, splashResolution, 0,
-						new Camera2(campos));
-				splashGroundFramebufferFirst[x][z] = true;
-
-				currentSplashTextures[x][z] = new Texture(groundfbo.getColorTextureID());
-
-				Shader levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile(
-						"res/shaders/levelobjectshader.vert", "res/shaders/levelobjectshader.frag"));
-				levelObjectShader.addArgument("u_texture", currentSplashTextures[x][z]);
-				levelObjectShader.addArgument("u_groundblocksizeX", (int) (2 * halfboxsizeX));
-				levelObjectShader.addArgument("u_groundblocksizeZ", (int) (2 * halfboxsizeZ));
-				game.addShader(levelObjectShader);
-				splashObjectShaders[x][z] = levelObjectShader;
-
-				Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
-						"res/shaders/combinationshader.frag"));
-				combShader.addArgument("u_texture", currentSplashTextures[x][z]);
-				combShader.addArgument("u_depthTexture", splashGroundFramebuffers[x][z].getDepthTexture());
-				combShader.addArgument("u_splashTexture", newSplashFramebuffer[x][z].getColorTexture());
-				PostProcessingShader combinationShader = new PostProcessingShader(combShader, 1);
-				combinationShader.getShader().addObject(game.screen);
-				splashCombinationShaders[x][z] = combinationShader;
-
-				Shader groundshader = new Shader(textureshaderID);
-				groundshader.addArgument("u_texture", currentSplashTextures[x][z]);
-				game.addShader(groundshader);
-				splashGroundShaders[x][z] = groundshader;
-
-				Box groundbox = new Box(halfboxsizeX + (2 * halfboxsizeX * x), -2f,
-						halfboxsizeZ + (2 * halfboxsizeZ * z), halfboxsizeX, 1, halfboxsizeZ);
-				groundbox.setRenderHints(false, true, false);
-				groundshader.addObject(groundbox);
-			}
-		}
+		float halfboxsizeX = levelsizeX / (float) (game.splashSubdivision * 2);
+		float halfboxsizeZ = levelsizeZ / (float) (game.splashSubdivision * 2);
 
 		float delta = 0.01f;
-		addStaticBox(halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
-		addStaticBox(1f, 0, halfboxsizeZ + 1f, 1f, 1, halfboxsizeZ - 1f - delta);
+		game.addStaticBox(halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f, space);
+		game.addStaticBox(1f, 0, halfboxsizeZ + 1f, 1f, 1, halfboxsizeZ - 1f - delta, space);
 		float boxsizeX = halfboxsizeX * 2;
 		float boxsizeZ = halfboxsizeZ * 2;
-		for (int i = 1; i < splashSubdivision - 1; i++) {
-			addStaticBox(i * boxsizeX + halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
-			addStaticBox(1f, 0, i * boxsizeZ + halfboxsizeZ, 1f, 1, halfboxsizeZ - delta);
-			addStaticBox(i * boxsizeX + halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta);
-			addStaticBox(levelsizeX - 1f, 0, i * boxsizeZ + halfboxsizeZ, 1f - delta, 1, halfboxsizeZ - delta);
+		for (int i = 1; i < game.splashSubdivision - 1; i++) {
+			game.addStaticBox(i * boxsizeX + halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f, space);
+			game.addStaticBox(1f, 0, i * boxsizeZ + halfboxsizeZ, 1f, 1, halfboxsizeZ - delta, space);
+			game.addStaticBox(i * boxsizeX + halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta,
+					space);
+			game.addStaticBox(levelsizeX - 1f, 0, i * boxsizeZ + halfboxsizeZ, 1f - delta, 1, halfboxsizeZ - delta,
+					space);
 		}
-		if (splashSubdivision > 1) {
-			addStaticBox(levelsizeX - halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f);
-			addStaticBox(1f, 0, levelsizeZ - halfboxsizeZ, 1f, 1, halfboxsizeZ - delta);
-			addStaticBox(halfboxsizeX + 1f, 0, levelsizeZ - 1f, halfboxsizeX - 1f - delta, 1, 1f - delta);
-			addStaticBox(levelsizeX - 1f, 0, halfboxsizeZ + 1f, 1f - delta, 1, halfboxsizeZ - 1f - delta);
-			addStaticBox(levelsizeX - halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta);
-			addStaticBox(levelsizeX - 1f, 0, levelsizeZ - halfboxsizeZ - 1f, 1f - delta, 1, halfboxsizeZ - 1f - delta);
+		if (game.splashSubdivision > 1) {
+			game.addStaticBox(levelsizeX - halfboxsizeX, 0, 1f, halfboxsizeX - delta, 1, 1f, space);
+			game.addStaticBox(1f, 0, levelsizeZ - halfboxsizeZ, 1f, 1, halfboxsizeZ - delta, space);
+			game.addStaticBox(halfboxsizeX + 1f, 0, levelsizeZ - 1f, halfboxsizeX - 1f - delta, 1, 1f - delta, space);
+			game.addStaticBox(levelsizeX - 1f, 0, halfboxsizeZ + 1f, 1f - delta, 1, halfboxsizeZ - 1f - delta, space);
+			game.addStaticBox(levelsizeX - halfboxsizeX, 0, levelsizeZ - 1f, halfboxsizeX - delta, 1, 1f - delta,
+					space);
+			game.addStaticBox(levelsizeX - 1f, 0, levelsizeZ - halfboxsizeZ - 1f, 1f - delta, 1,
+					halfboxsizeZ - 1f - delta, space);
 		}
-
-		Box frame1 = new Box(halflevelsizeX, 0, -3, halflevelsizeX + 6, 1, 3);
-		Box frame2 = new Box(halflevelsizeX, 0, levelsizeZ + 3, halflevelsizeX + 6, 1, 3);
-		Box frame3 = new Box(-3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
-		Box frame4 = new Box(levelsizeX + 3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
-		frame3.rotate(0, 90, 0);
-		frame4.rotate(0, 90, 0);
-		frame1.setRenderHints(false, true, false);
-		frame2.setRenderHints(false, true, false);
-		frame3.setRenderHints(false, true, false);
-		frame4.setRenderHints(false, true, false);
-		frameShader.addObject(frame1);
-		frameShader.addObject(frame2);
-		frameShader.addObject(frame3);
-		frameShader.addObject(frame4);
 
 		shooters = new ArrayList<Shootable>();
 		targets = new ArrayList<Damageable>();
 		enemies = new ArrayList<Enemy>();
 		lateupdates = new ArrayList<LateUpdateable>();
+		levelgeometry = new ArrayList<Box>();
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
 		shots = new ArrayList<Shot>();
 		shotColorShaders = new ArrayList<Shader>();
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 0, 1)));
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 0, 1)));
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 0, 1, 1)));
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 1, 0, 1)));
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 1, 1)));
-		shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 1, 1)));
+		if (playercolor.x == 1 && playercolor.y == 0 && playercolor.z == 0) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 0, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 0, 1)));
+		}
+		if (playercolor.x == 0 && playercolor.y == 1 && playercolor.z == 0) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 0, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 0, 1)));
+		}
+		if (playercolor.x == 0 && playercolor.y == 0 && playercolor.z == 1) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(0, 0, 1, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 0, 1, 1)));
+		}
+		if (playercolor.x == 1 && playercolor.y == 1 && playercolor.z == 0) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(1, 1, 0, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 1, 0, 1)));
+		}
+		if (playercolor.x == 1 && playercolor.y == 0 && playercolor.z == 1) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 1, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(1, 0, 1, 1)));
+		}
+		if (playercolor.x == 0 && playercolor.y == 1 && playercolor.z == 1) {
+			playerShotShader = new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 1, 1));
+		} else {
+			shotColorShaders.add(new Shader(colorshaderprogram, "u_color", new Vector4f(0, 1, 1, 1)));
+		}
+		game.addShader(playerShotShader);
 		for (Shader s : shotColorShaders) {
 			game.addShader(s);
 		}
 
-		Shader headshader = new Shader(
+		playershader = new Shader(
 				ShaderLoader.loadShaderFromFile("res/shaders/phongshader.vert", "res/shaders/phongshader.frag"));
-		headshader.addArgumentName("u_lightpos");
-		headshader.addArgument(new Vector3f(0, 0, 10));
-		headshader.addArgumentName("u_ambient");
-		headshader.addArgument(new Vector3f(0.2f, 0.2f, 0.2f));
-		headshader.addArgumentName("u_diffuse");
-		headshader.addArgument(new Vector3f(0.5f, 0.5f, 0.5f));
-		headshader.addArgumentName("u_shininess");
-		headshader.addArgument(10f);
-		game.addShader(headshader);
+		playershader.addArgumentName("u_lightpos");
+		playershader.addArgument(new Vector3f(0, 0, 10));
+		playershader.addArgumentName("u_ambient");
+		playershader.addArgument(new Vector3f(0.2f, 0.2f, 0.2f));
+		playershader.addArgumentName("u_diffuse");
+		playershader.addArgument(new Vector3f(0.5f, 0.5f, 0.5f));
+		playershader.addArgumentName("u_shininess");
+		playershader.addArgument(10f);
+		game.addShader(playershader);
 
 		generateLevel(100, 10);
 
@@ -324,7 +263,7 @@ public class Game implements WindowContent {
 		ShapedObject3 bodyshape = ModelLoader.load("res/models/playerbase.obj");
 		bodyshape.translateTo(playerspawn.x, 0, playerspawn.z);
 		bodyshape.scale(1, 0.8f, 1);
-		player = new Player(playerspawn.x, playerspawn.y, playerspawn.z, headshader, bodyshape,
+		player = new Player(playerspawn.x, playerspawn.y, playerspawn.z, playershader, bodyshape,
 				new RigidBody3(PhysicsShapeCreator.create(new CylinderData(0, 0, 0, xzscale * 0.6f, 1))),
 				new Sphere(playerspawn.x, 1f, playerspawn.z, 0.3f, 32, 32),
 				new RigidBody3(PhysicsShapeCreator.create(new SphereData(0, 0, 0, 0.3f))));
@@ -334,14 +273,14 @@ public class Game implements WindowContent {
 		space.addCollisionFilter(player.getBody(), player.getHeadBody());
 		player.getShapedObject().setRenderHints(false, false, true);
 		player.getHeadShapedObject().setRenderHints(false, false, true);
-		headshader.addObject(player.getShapedObject());
-		headshader.addObject(player.getHeadShapedObject());
+		playershader.addObject(player.getShapedObject());
+		playershader.addObject(player.getHeadShapedObject());
 		shooters.add(player);
 		targets.add(player);
 		lateupdates.add(player);
 
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
-				shotColorShaders.get(0), shotgeometry, shotcollisionshape));
+				playerShotShader, shotgeometry, shotcollisionshape));
 		/*
 		 * player.addCannon(new StandardCannon(this, space, player, new
 		 * Vector3f(0.8f, 0, -1), new Vector3f(-0.4472136, 0, 0.8944272),
@@ -353,27 +292,6 @@ public class Game implements WindowContent {
 
 		setupInputs();
 		updatePlayerRotationVariables();
-
-		Quad a = new Quad(halflevelsizeX, halflevelsizeZ, halflevelsizeX, halflevelsizeZ);
-		a.setRenderHints(false, true, false);
-		newSplashShader.addObject(a);
-		newSplashShader.setArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/whitePixel.png")));
-		newSplashShader.setArgument("u_color", new Vector4f(1, 1, 1, 1));
-		for (FramebufferObject[] fbos : splashGroundFramebuffers) {
-			for (FramebufferObject fbo : fbos) {
-				fbo.updateTexture();
-			}
-		}
-		newSplashShader.removeObject(a);
-		a.delete();
-	}
-
-	private void addStaticBox(float x, float y, float z, float width, float height, float depth) {
-		Box box = new Box(x, y, z, width, height, depth);
-		box.setRenderHints(false, false, false);
-		RigidBody3 rb = new RigidBody3(PhysicsShapeCreator.create(box));
-		space.addRigidBody(box, rb);
-		splashObjectShaders[calculateSplashGridX((int) x)][calculateSplashGridZ((int) z)].addObject(box);
 	}
 
 	private void addTower(float x, float y, float z) {
@@ -410,7 +328,7 @@ public class Game implements WindowContent {
 			int posZ = (int) (Math.random() * gridsizeZ);
 			if (!levelgrid[posX][posZ]) {
 				levelgrid[posX][posZ] = true;
-				addStaticBox(posX * 2 + 3, 0, posZ * 2 + 3, sizeX, 1, sizeZ);
+				levelgeometry.add(game.addStaticBox(posX * 2 + 3, 0, posZ * 2 + 3, sizeX, 1, sizeZ, space));
 			} else {
 				i--;
 			}
@@ -575,10 +493,10 @@ public class Game implements WindowContent {
 					Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, splashsize, splashsize);
 					a.setRenderHints(false, true, false);
 					a.rotate((float) (Math.random() * 360));
-					newSplashShader.addObject(a);
-					newSplashShader.setArgument("u_texture",
+					game.newSplashShader.addObject(a);
+					game.newSplashShader.setArgument("u_texture",
 							splashtextures[(int) (Math.random() * splashtextures.length)]);
-					newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
+					game.newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
 
 					shots.remove(i);
 					deleteShot(shot);
@@ -586,12 +504,12 @@ public class Game implements WindowContent {
 					for (Vector2f grids : getAffectedSplashGrids(a)) {
 						int x = (int) grids.x;
 						int z = (int) grids.y;
-						if (x >= 0 && z >= 0 && x < splashSubdivision && z < splashSubdivision) {
-							newSplashFramebuffer[x][z].updateTexture();
+						if (x >= 0 && z >= 0 && x < game.splashSubdivision && z < game.splashSubdivision) {
+							game.newSplashFramebuffer[x][z].updateTexture();
 							splashGround(x, z);
 						}
 					}
-					newSplashShader.removeObject(a);
+					game.newSplashShader.removeObject(a);
 
 					a.delete();
 					i--;
@@ -616,14 +534,6 @@ public class Game implements WindowContent {
 		game.zoomOut(halflevelsizeX, halflevelsizeZ);
 	}
 
-	private int calculateSplashGridX(int x) {
-		return x / (int) (levelsizeX / (float) splashSubdivision);
-	}
-
-	private int calculateSplashGridZ(int z) {
-		return z / (int) (levelsizeZ / (float) splashSubdivision);
-	}
-
 	private void removeAllEnemies() {
 		for (Damageable damaged : targets) {
 			shooters.remove(damaged.getShooter());
@@ -643,10 +553,10 @@ public class Game implements WindowContent {
 
 		float diag = (float) Math.sqrt(quad.getSize().x * quad.getSize().x + quad.getSize().y * quad.getSize().y);
 
-		int minX = calculateSplashGridX((int) Math.floor(quad.getTranslation().getX() - diag));
-		int minZ = calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
-		int maxX = calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
-		int maxZ = calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
+		int minX = game.calculateSplashGridX((int) Math.floor(quad.getTranslation().getX() - diag));
+		int minZ = game.calculateSplashGridZ((int) Math.floor(quad.getTranslation().getY() - diag));
+		int maxX = game.calculateSplashGridX((int) Math.ceil(quad.getTranslation().getX() + diag));
+		int maxZ = game.calculateSplashGridZ((int) Math.ceil(quad.getTranslation().getY() + diag));
 
 		affectedSplashGrids.add(new Vector2f(minX, minZ));
 		if (maxX > minX) {
@@ -663,14 +573,17 @@ public class Game implements WindowContent {
 	}
 
 	private void splashGround(int x, int z) {
-		if (splashGroundFramebufferFirst[x][z]) {
-			splashCombinationShaders[x][z].apply(splashGroundFramebuffers[x][z], splashGroundFramebufferHelpers[x][z]);
-			currentSplashTextures[x][z].setTextureID(splashGroundFramebufferHelpers[x][z].getColorTextureID());
+		if (game.splashGroundFramebufferFirst[x][z]) {
+			game.splashCombinationShaders[x][z].apply(game.splashGroundFramebuffers[x][z],
+					game.splashGroundFramebufferHelpers[x][z]);
+			game.currentSplashTextures[x][z]
+					.setTextureID(game.splashGroundFramebufferHelpers[x][z].getColorTextureID());
 		} else {
-			splashCombinationShaders[x][z].apply(splashGroundFramebufferHelpers[x][z], splashGroundFramebuffers[x][z]);
-			currentSplashTextures[x][z].setTextureID(splashGroundFramebuffers[x][z].getColorTextureID());
+			game.splashCombinationShaders[x][z].apply(game.splashGroundFramebufferHelpers[x][z],
+					game.splashGroundFramebuffers[x][z]);
+			game.currentSplashTextures[x][z].setTextureID(game.splashGroundFramebuffers[x][z].getColorTextureID());
 		}
-		splashGroundFramebufferFirst[x][z] = !splashGroundFramebufferFirst[x][z];
+		game.splashGroundFramebufferFirst[x][z] = !game.splashGroundFramebufferFirst[x][z];
 	}
 
 	private void deleteShot(Shot shot) {
@@ -705,8 +618,42 @@ public class Game implements WindowContent {
 
 	@Override
 	public void delete() {
-		// TODO Auto-generated method stub
+		game.getShader().remove(defaultshader);
+		game.getShader().remove(blackcolorshader);
+		game.getShader().remove(playercolorshader);
+		game.getShader().remove(playershader);
+		game.getShader().remove(healthbarshader);
+		game.getShaderInterface().remove(defaultshaderInterface);
+		game.getShaderInterface().remove(redcolorshaderInterface);
+		defaultshader.delete();
+		blackcolorshader.delete();
+		playercolorshader.delete();
+		playershader.delete();
+		healthbarshader.delete();
+		defaultshaderInterface.delete();
+		redcolorshaderInterface.delete();
 
+		game.getShader().remove(playerShotShader);
+		playerShotShader.delete();
+		for (Shader s : shotColorShaders) {
+			game.getShader().remove(s);
+			s.delete();
+		}
+		shotColorShaders.clear();
+
+		for (Box b : levelgeometry) {
+			game.splashObjectShaders[game.calculateSplashGridX((int) b.getTranslation().x)][game
+					.calculateSplashGridZ((int) b.getTranslation().z)].removeObject(b);
+			b.delete();
+		}
+		levelgeometry.clear();
+
+		game.inputs.removeEvent(eventEsc);
+		game.inputs.removeEvent(eventUp);
+		game.inputs.removeEvent(eventDown);
+		game.inputs.removeEvent(eventLeft);
+		game.inputs.removeEvent(eventRight);
+		game.inputs.removeEvent(eventShoot);
 	}
 
 	@Override
@@ -717,5 +664,15 @@ public class Game implements WindowContent {
 	@Override
 	public void setActive(boolean active) {
 		isActive = active;
+	}
+
+	@Override
+	public Vector3f getPlayerColor() {
+		return playercolor;
+	}
+
+	@Override
+	public boolean isBackgroundWhite() {
+		return whitebackground;
 	}
 }

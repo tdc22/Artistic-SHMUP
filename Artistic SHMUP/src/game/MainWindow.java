@@ -8,12 +8,25 @@ import display.PixelFormat;
 import display.VideoSettings;
 import loader.FontLoader;
 import loader.ShaderLoader;
+import loader.TextureLoader;
+import objects.Camera2;
+import objects.RigidBody3;
+import physics.PhysicsShapeCreator;
+import physics.PhysicsSpace;
 import quaternion.Quaternionf;
+import shader.PostProcessingShader;
 import shader.Shader;
+import shape.Box;
+import shape2d.Quad;
 import sound.NullSoundEnvironment;
+import texture.FramebufferObject;
+import texture.Texture;
 import utils.Debugger;
 import utils.DefaultValues;
+import utils.ProjectionHelper;
+import vector.Vector2f;
 import vector.Vector3f;
+import vector.Vector4f;
 
 public class MainWindow extends StandardGame {
 	WindowContent content;
@@ -24,9 +37,27 @@ public class MainWindow extends StandardGame {
 	boolean zoomingIn = true;
 	final int levelsizeX = 160;
 	final int levelsizeZ = 160;
+	final int halflevelsizeX = levelsizeX / 2;
+	final int halflevelsizeZ = levelsizeZ / 2;
+	final int splashResolution = 512; // power of 2 !!!
+	final int splashSubdivision = 4;
+
+	Shader[][] splashGroundShaders, splashObjectShaders;
+	FramebufferObject[][] splashGroundFramebuffers;
+	FramebufferObject[][] splashGroundFramebufferHelpers;
+	FramebufferObject[][] newSplashFramebuffer;
+	PostProcessingShader[][] splashCombinationShaders;
+	boolean[][] splashGroundFramebufferFirst;
+	Texture[][] currentSplashTextures;
+	Box[][] groundboxes;
+	Texture whitePixelTexture;
+
+	Shader newSplashShader;
+
+	final Quaternionf lookDown = new Quaternionf(0.70710677, -0.70710677, 0.0, 0.0);
 
 	public MainWindow() {
-		this.content = new MainMenu(this);
+		this.content = new MainMenu(this, new Vector3f(1, 0, 0), true);
 		this.content.setActive(true);
 	}
 
@@ -49,10 +80,15 @@ public class MainWindow extends StandardGame {
 				cam.translateTo(outCurve.getPoint(zoomtimer));
 				cam.rotateTo(outRotCurve.getRotation(zoomtimer));
 			}
-			if (zoomtimer == 1 && zoomingIn) {
+			if (zoomtimer == 1) {
+				if (zoomingIn) {
+					content.setActive(true);
+				} else {
+					setContent(new MainMenu(this, content.getPlayerColor(), content.isBackgroundWhite()));
+					content.setActive(true);
+				}
 				zoomtimer = 0;
-				zoomingIn = false;
-				content.setActive(true);
+				zoomingIn = !zoomingIn;
 			}
 		}
 	}
@@ -84,8 +120,8 @@ public class MainWindow extends StandardGame {
 	}
 
 	public void startGame() {
-		setContent(new Game(this, levelsizeX, levelsizeZ));
-		zoomIn(levelsizeX / 2, levelsizeZ / 2);
+		setContent(new Game(this, levelsizeX, levelsizeZ, content.getPlayerColor(), content.isBackgroundWhite()));
+		zoomIn(halflevelsizeX, halflevelsizeZ);
 		content.setActive(false);
 	}
 
@@ -95,7 +131,11 @@ public class MainWindow extends StandardGame {
 				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 20, 1280, 720, "Artful SHMUP", false,
 						DefaultValues.DEFAULT_DISPLAY_RESIZEABLE, DefaultValues.DEFAULT_DISPLAY_FULLSCREEN),
 				new PixelFormat(), new VideoSettings(1280, 720), new NullSoundEnvironment());
+		layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
+				levelsizeZ / (float) splashSubdivision, 0, -1, 1));
 		cam.setFlyCam(false);
+		cam.translateTo(halflevelsizeX, 100, halflevelsizeZ);
+		cam.rotateTo(lookDown);
 		setRendered(true, false, true);
 
 		int defaultshaderID = ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert",
@@ -108,6 +148,36 @@ public class MainWindow extends StandardGame {
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface,
 				FontLoader.loadFont("res/fonts/DejaVuSans.ttf"), cam);
 
+		Shader frameShader = new Shader(
+				ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert", "res/shaders/textureshader.frag"));
+		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood.png")));
+		addShader(frameShader);
+
+		Box frame1 = new Box(halflevelsizeX, 0, -3, halflevelsizeX + 6, 1, 3);
+		Box frame2 = new Box(halflevelsizeX, 0, levelsizeZ + 3, halflevelsizeX + 6, 1, 3);
+		Box frame3 = new Box(-3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
+		Box frame4 = new Box(levelsizeX + 3, 0, halflevelsizeZ, halflevelsizeZ, 1, 3);
+		frame3.rotate(0, 90, 0);
+		frame4.rotate(0, 90, 0);
+		frame1.setRenderHints(false, true, false);
+		frame2.setRenderHints(false, true, false);
+		frame3.setRenderHints(false, true, false);
+		frame4.setRenderHints(false, true, false);
+		frameShader.addObject(frame1);
+		frameShader.addObject(frame2);
+		frameShader.addObject(frame3);
+		frameShader.addObject(frame4);
+
+		whitePixelTexture = new Texture(TextureLoader.loadTexture("res/textures/whitePixel.png"));
+
+		newSplashShader = new Shader(
+				ShaderLoader.loadShaderFromFile("res/shaders/splashshader.vert", "res/shaders/splashshader.frag"));
+		newSplashShader.addArgument("u_texture", new Texture());
+		newSplashShader.addArgument("u_color", new Vector4f(0, 1, 0, 1));
+		addShader2d(newSplashShader);
+
+		initCanvas();
+		resetCanvas(true);
 		content.init();
 	}
 
@@ -118,9 +188,7 @@ public class MainWindow extends StandardGame {
 		Vector3f d = new Vector3f(halflevelsizeX, 100, halflevelsizeZ);
 		Vector3f c = new Vector3f(halflevelsizeX, 40, halflevelsizeZ);
 		outCurve = new BezierCurve3(cam.getTranslation(), cam.getTranslation(), c, d);
-		Quaternionf lookdown = new Quaternionf();
-		lookdown.rotate(-90, new Vector3f(1, 0, 0));
-		outRotCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookdown, lookdown);
+		outRotCurve = new SquadCurve3(cam.getRotation(), cam.getRotation(), lookDown, lookDown);
 	}
 
 	public void zoomIn(int halflevelsizeX, int halflevelsizeZ) {
@@ -128,9 +196,107 @@ public class MainWindow extends StandardGame {
 		Vector3f d = new Vector3f(halflevelsizeX, 100, halflevelsizeZ);
 		Vector3f c = new Vector3f(halflevelsizeX, 40, halflevelsizeZ);
 		inCurve = new BezierCurve3(d, c, target, target);
-		Quaternionf lookdown = new Quaternionf();
-		lookdown.rotate(-90, new Vector3f(1, 0, 0));
 		Quaternionf targetRot = new Quaternionf(0.9238795, -0.38268346, 0.0, 0.0);
-		inRotCurve = new SquadCurve3(lookdown, targetRot, lookdown, targetRot);
+		inRotCurve = new SquadCurve3(lookDown, targetRot, lookDown, targetRot);
+	}
+
+	public void initCanvas() {
+		splashGroundFramebuffers = new FramebufferObject[splashSubdivision][splashSubdivision];
+		splashGroundFramebufferHelpers = new FramebufferObject[splashSubdivision][splashSubdivision];
+		newSplashFramebuffer = new FramebufferObject[splashSubdivision][splashSubdivision];
+		splashGroundFramebufferFirst = new boolean[splashSubdivision][splashSubdivision];
+		splashGroundShaders = new Shader[splashSubdivision][splashSubdivision];
+		splashObjectShaders = new Shader[splashSubdivision][splashSubdivision];
+		splashCombinationShaders = new PostProcessingShader[splashSubdivision][splashSubdivision];
+		currentSplashTextures = new Texture[splashSubdivision][splashSubdivision];
+		float halfboxsizeX = levelsizeX / (float) (splashSubdivision * 2);
+		float halfboxsizeZ = levelsizeZ / (float) (splashSubdivision * 2);
+		groundboxes = new Box[splashSubdivision][splashSubdivision];
+
+		for (int x = 0; x < splashSubdivision; x++) {
+			for (int z = 0; z < splashSubdivision; z++) {
+				Vector2f campos = new Vector2f(2 * halfboxsizeX * x, 2 * halfboxsizeZ * z);
+				FramebufferObject groundfbo = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+						new Camera2(campos));
+				splashGroundFramebuffers[x][z] = groundfbo;
+				splashGroundFramebufferHelpers[x][z] = new FramebufferObject(layer2d, splashResolution,
+						splashResolution, 0, new Camera2(campos));
+				newSplashFramebuffer[x][z] = new FramebufferObject(layer2d, splashResolution, splashResolution, 0,
+						new Camera2(campos));
+				splashGroundFramebufferFirst[x][z] = true;
+
+				currentSplashTextures[x][z] = new Texture(groundfbo.getColorTextureID());
+
+				Shader levelObjectShader = new Shader(ShaderLoader.loadShaderFromFile(
+						"res/shaders/levelobjectshader.vert", "res/shaders/levelobjectshader.frag"));
+				levelObjectShader.addArgument("u_texture", currentSplashTextures[x][z]);
+				levelObjectShader.addArgument("u_groundblocksizeX", (int) (2 * halfboxsizeX));
+				levelObjectShader.addArgument("u_groundblocksizeZ", (int) (2 * halfboxsizeZ));
+				addShader(levelObjectShader);
+				splashObjectShaders[x][z] = levelObjectShader;
+
+				Shader combShader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/combinationshader.vert",
+						"res/shaders/combinationshader.frag"));
+				combShader.addArgument("u_texture", currentSplashTextures[x][z]);
+				combShader.addArgument("u_depthTexture", splashGroundFramebuffers[x][z].getDepthTexture());
+				combShader.addArgument("u_splashTexture", newSplashFramebuffer[x][z].getColorTexture());
+				PostProcessingShader combinationShader = new PostProcessingShader(combShader, 1);
+				combinationShader.getShader().addObject(screen);
+				splashCombinationShaders[x][z] = combinationShader;
+
+				Shader groundshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
+						"res/shaders/textureshader.frag"));
+				groundshader.addArgument("u_texture", currentSplashTextures[x][z]);
+				addShader(groundshader);
+				splashGroundShaders[x][z] = groundshader;
+
+				Box groundbox = new Box(halfboxsizeX + (2 * halfboxsizeX * x), -2f,
+						halfboxsizeZ + (2 * halfboxsizeZ * z), halfboxsizeX, 1, halfboxsizeZ);
+				groundbox.setRenderHints(false, true, false);
+				groundshader.addObject(groundbox);
+			}
+		}
+	}
+
+	public void resetCanvas(boolean white) {
+		Quad a = new Quad(halflevelsizeX, halflevelsizeZ, halflevelsizeX, halflevelsizeZ);
+		a.setRenderHints(false, true, false);
+		newSplashShader.addObject(a);
+		newSplashShader.setArgument("u_texture", whitePixelTexture);
+		if (white) {
+			newSplashShader.setArgument("u_color", new Vector4f(1f, 1f, 1f, 1f));
+		} else {
+			newSplashShader.setArgument("u_color", new Vector4f(0f, 0f, 0f, 1f));
+		}
+		for (FramebufferObject[] fbos : splashGroundFramebuffers) {
+			for (FramebufferObject fbo : fbos) {
+				fbo.updateTexture();
+			}
+		}
+		for (FramebufferObject[] fbos : splashGroundFramebufferHelpers) {
+			for (FramebufferObject fbo : fbos) {
+				fbo.updateTexture();
+			}
+		}
+		newSplashShader.removeObject(a);
+		a.delete();
+	}
+
+	public Box addStaticBox(float x, float y, float z, float width, float height, float depth, PhysicsSpace space) {
+		Box box = new Box(x, y, z, width, height, depth);
+		box.setRenderHints(false, false, false);
+		RigidBody3 rb = new RigidBody3(PhysicsShapeCreator.create(box));
+		if (space != null)
+			space.addRigidBody(box, rb);
+		splashObjectShaders[calculateSplashGridX((int) x)][calculateSplashGridZ((int) z)].addObject(box);
+		return box;
+	}
+
+	public int calculateSplashGridX(int x) {
+		return x / (int) (levelsizeX / (float) splashSubdivision);
+	}
+
+	public int calculateSplashGridZ(int z) {
+		return z / (int) (levelsizeZ / (float) splashSubdivision);
 	}
 }

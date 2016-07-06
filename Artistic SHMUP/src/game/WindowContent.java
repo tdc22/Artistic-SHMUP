@@ -1,5 +1,7 @@
 package game;
 
+import vector.Vector3f;
+
 public interface WindowContent {
 	public void init();
 
@@ -14,4 +16,8 @@ public interface WindowContent {
 	public void delete();
 
 	public boolean isActive();
+
+	public Vector3f getPlayerColor();
+
+	public boolean isBackgroundWhite();
 }
