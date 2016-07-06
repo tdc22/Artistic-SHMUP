@@ -125,4 +125,9 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 		return translationForCannons;
 	}
 
+	@Override
+	public Damageable getDamageable() {
+		return this;
+	}
+
 }

@@ -5,7 +5,7 @@ import shader.Shader;
 public class Player extends Ship {
 	final float acceleration = 30f;
 	final float maxspeed = 20f;
-	final float maxspeedSqared = maxspeed * maxspeed;
+	final float maxspeedSquared = maxspeed * maxspeed;
 
 	public Player(float x, float y, float z, Shader shader, ShapedObject3 shape, RigidBody3 body,
 			ShapedObject3 headshape, RigidBody3 headbody) {
@@ -21,6 +21,6 @@ public class Player extends Ship {
 	}
 
 	public float getMaxSpeedSquared() {
-		return maxspeedSqared;
+		return maxspeedSquared;
 	}
 }

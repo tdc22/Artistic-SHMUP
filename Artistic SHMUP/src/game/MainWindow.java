@@ -119,8 +119,9 @@ public class MainWindow extends StandardGame {
 		content.init();
 	}
 
-	public void startGame() {
-		setContent(new Game(this, levelsizeX, levelsizeZ, content.getPlayerColor(), content.isBackgroundWhite()));
+	public void startGame(boolean endless) {
+		setContent(
+				new Game(this, levelsizeX, levelsizeZ, content.getPlayerColor(), content.isBackgroundWhite(), endless));
 		zoomIn(halflevelsizeX, halflevelsizeZ);
 		content.setActive(false);
 	}

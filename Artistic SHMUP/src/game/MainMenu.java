@@ -110,7 +110,7 @@ public class MainMenu implements WindowContent {
 		if (mouseX > minMouseoverX && mouseX < maxMouseoverX && mouseY > 240 && mouseY < 300) {
 			start.setFontsize(fontSizeMouseover);
 			if (mouseclick.isActive()) {
-				game.startGame();
+				game.startGame(false);
 			}
 			if (!shift1) {
 				start.translate(-20, translationMouseoverOffsetY);
@@ -127,7 +127,7 @@ public class MainMenu implements WindowContent {
 		if (mouseX > minMouseoverX && mouseX < maxMouseoverX && mouseY > 310 && mouseY < 370) {
 			endless.setFontsize(fontSizeMouseover);
 			if (mouseclick.isActive()) {
-				game.startGame();
+				game.startGame(true);
 			}
 			if (!shift2) {
 				endless.translate(-31, translationMouseoverOffsetY);

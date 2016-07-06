@@ -16,8 +16,10 @@ import loader.ShaderLoader;
 import loader.TextureLoader;
 import manifold.CollisionManifold;
 import manifold.SimpleManifoldManager;
+import math.VecMath;
 import narrowphase.EPA;
 import narrowphase.GJK;
+import objects.Chaser;
 import objects.CollisionShape3;
 import objects.Damageable;
 import objects.Enemy;
@@ -72,9 +74,12 @@ public class Game implements WindowContent {
 	final int levelsizeZ;
 	final int halflevelsizeX;
 	final int halflevelsizeZ;
+	final int gridsizeX;
+	final int gridsizeZ;
 	Vector3f playercolor;
 	boolean whitebackground;
 
+	boolean[][] levelgrid;
 	BoxShape groundshape;
 
 	final int healthbarHalfSizeX = 100;
@@ -82,9 +87,11 @@ public class Game implements WindowContent {
 	final int healthbarMargin = 10;
 	final int healthbarBorder = 1;
 
+	boolean isEndless;
+	int spawntimer, maxspawntimer, spawntowers, spawnchasers;
 	boolean isActive = true;
 
-	Shader blackcolorshader, playercolorshader;
+	Shader blackcolorshader, whitecolorshader, playercolorshader;
 	Texture[] splashtextures;
 
 	Quad healthbar;
@@ -96,20 +103,32 @@ public class Game implements WindowContent {
 	List<Shootable> shooters;
 	List<Damageable> targets;
 	List<Enemy> enemies;
+	List<Enemy> movingEnemies;
 	List<LateUpdateable> lateupdates;
 	List<Shot> shots;
+	List<Chaser> chasers;
 	Shader playerShotShader;
 	List<Shader> shotColorShaders;
 	List<Box> levelgeometry;
 
-	public Game(MainWindow game, int levelsizeX, int levelsizeZ, Vector3f playercolor, boolean whitebackground) {
+	public Game(MainWindow game, int levelsizeX, int levelsizeZ, Vector3f playercolor, boolean whitebackground,
+			boolean isEndless) {
 		this.game = game;
 		this.levelsizeX = levelsizeX;
 		this.levelsizeZ = levelsizeZ;
 		halflevelsizeX = levelsizeX / 2;
 		halflevelsizeZ = levelsizeZ / 2;
+		gridsizeX = levelsizeX / 2 - 2;
+		gridsizeZ = levelsizeZ / 2 - 2;
 		this.playercolor = playercolor;
 		this.whitebackground = whitebackground;
+		this.isEndless = isEndless;
+		if (isEndless) {
+			spawntimer = 0;
+			maxspawntimer = 12000;
+			spawntowers = 1;
+			spawnchasers = 0;
+		}
 	}
 
 	@Override
@@ -136,6 +155,9 @@ public class Game implements WindowContent {
 		blackcolorshader = new Shader(colorshaderprogram);
 		blackcolorshader.addArgument("u_color", new Vector4f(0, 0, 0, 1));
 		game.addShader(blackcolorshader);
+		whitecolorshader = new Shader(colorshaderprogram);
+		whitecolorshader.addArgument("u_color", new Vector4f(1, 1, 1, 1));
+		game.addShader(whitecolorshader);
 		redcolorshaderInterface = new Shader(colorshaderprogram);
 		redcolorshaderInterface.addArgument("u_color", new Vector4f(1, 0, 0, 1));
 		game.addShaderInterface(redcolorshaderInterface);
@@ -202,8 +224,10 @@ public class Game implements WindowContent {
 		shooters = new ArrayList<Shootable>();
 		targets = new ArrayList<Damageable>();
 		enemies = new ArrayList<Enemy>();
+		movingEnemies = new ArrayList<Enemy>();
 		lateupdates = new ArrayList<LateUpdateable>();
 		levelgeometry = new ArrayList<Box>();
+		chasers = new ArrayList<Chaser>();
 		shotgeometry = new Sphere(0, 0, 0, 0.2f, 36, 36);
 		shotcollisionshape = PhysicsShapeCreator.create(shotgeometry);
 
@@ -256,7 +280,11 @@ public class Game implements WindowContent {
 		playershader.addArgument(10f);
 		game.addShader(playershader);
 
-		generateLevel(100, 10);
+		if (isEndless) {
+			generateLevel(100, 1, 0);
+		} else {
+			generateLevel(100, 10, 5);
+		}
 
 		float xzscale = 1.3f;
 		playerspawn = new Vector3f(halflevelsizeX, 0, halflevelsizeZ);
@@ -294,12 +322,18 @@ public class Game implements WindowContent {
 		updatePlayerRotationVariables();
 	}
 
+	public void spawnWave() {
+		spawntowers++;
+		spawnchasers++;
+		spawnTowers(spawntowers);
+		spawnChasers(spawnchasers);
+	}
+
 	private void addTower(float x, float y, float z) {
-		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleObject().getVertices().size() / 4, 50);
+		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleList().size(), 50);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
-				shotColorShaders.get((int) (Math.random() * shotColorShaders.size())), shotgeometry,
-				shotcollisionshape));
+				getRandomShotColorShader(), shotgeometry, shotcollisionshape));
 		blackcolorshader.addObject(tower);
 		shooters.add(tower);
 		targets.add(tower);
@@ -309,10 +343,27 @@ public class Game implements WindowContent {
 				enemyLifebarSize, 1000);
 	}
 
-	public void generateLevel(int numboxes, int numtowers) {
-		int gridsizeX = levelsizeX / 2 - 2;
-		int gridsizeZ = levelsizeZ / 2 - 2;
-		boolean[][] levelgrid = new boolean[gridsizeX][gridsizeZ];
+	private void addChaser(float x, float y, float z) {
+		Shader colorshader = getRandomShotColorShader();
+		Chaser chaser = new Chaser(x, y, z, blackcolorshader, colorshader, colorshader,
+				lifebars.getParticleList().size(), 70);
+		space.addRigidBody(chaser, chaser.getBody());
+		blackcolorshader.addObject(chaser);
+		targets.add(chaser);
+		enemies.add(chaser);
+		movingEnemies.add(chaser);
+		chasers.add(chaser);
+		lifebars.addParticle(
+				new Vector3f(chaser.getTranslation().x, chaser.getTranslation().y + 2, chaser.getTranslation().z), zero,
+				enemyLifebarSize, 1000);
+	}
+
+	public Shader getRandomShotColorShader() {
+		return shotColorShaders.get((int) (Math.random() * shotColorShaders.size()));
+	}
+
+	public void generateLevel(int numboxes, int numtowers, int numchasers) {
+		levelgrid = new boolean[gridsizeX][gridsizeZ];
 
 		for (int x = 0; x < gridsizeX; x++) {
 			for (int z = 0; z < gridsizeZ; z++) {
@@ -333,12 +384,28 @@ public class Game implements WindowContent {
 				i--;
 			}
 		}
+		spawnTowers(numtowers);
+		spawnChasers(numchasers);
+	}
+
+	private void spawnTowers(int numtowers) {
 		for (int i = 0; i < numtowers; i++) {
 			int posX = (int) (Math.random() * gridsizeX);
 			int posZ = (int) (Math.random() * gridsizeZ);
 			if (!levelgrid[posX][posZ]) {
-				levelgrid[posX][posZ] = true;
 				addTower(posX * 2 + 3, 0, posZ * 2 + 3);
+			} else {
+				i--;
+			}
+		}
+	}
+
+	private void spawnChasers(int numchasers) {
+		for (int i = 0; i < numchasers; i++) {
+			int posX = (int) (Math.random() * gridsizeX);
+			int posZ = (int) (Math.random() * gridsizeZ);
+			if (!levelgrid[posX][posZ]) {
+				addChaser(posX * 2 + 3, 0, posZ * 2 + 3);
 			} else {
 				i--;
 			}
@@ -459,64 +526,52 @@ public class Game implements WindowContent {
 					}
 					if (damaged != null) {
 						int damage = 10;
-						damaged.damage(damage);
-						if (damaged.getHealthbarID() == -1) {
-							healthbar.scaleTo(damaged.getHealth() / 100f, 1);
-							healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
-						} else {
-							lifebars.removeParticle(damaged.getHealthbarID());
-							damaged.setHealthbarID(lifebars.addParticle(
-									new Vector3f(damaged.getTranslation().x, damaged.getTranslation().y + 2,
-											damaged.getTranslation().z),
-									zero, enemyLifebarSize,
-									(int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000)));
-						}
-						if (damaged.getHealth() <= 0) {
-							targets.remove(damaged);
-							enemies.remove(damaged);
-							shooters.remove(damaged.getShooter());
-							space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
-							damaged.getShader().removeObject(damaged.getShapedObject());
-							damaged.getShapedObject().delete();
-							if (damaged.getHealthbarID() == -1) {
-								exitGame();
-							} else {
-								lifebars.removeParticle(damaged.getHealthbarID());
-								if (enemies.isEmpty()) {
-									exitGame();
-								}
-							}
-						}
+						applyDamage(damaged, damage);
 					}
 
 					float splashsize = 1.5f + (float) (Math.random() * 1.5f);
-					Quad a = new Quad(shot.getTranslation().x, shot.getTranslation().z, splashsize, splashsize);
-					a.setRenderHints(false, true, false);
-					a.rotate((float) (Math.random() * 360));
-					game.newSplashShader.addObject(a);
-					game.newSplashShader.setArgument("u_texture",
-							splashtextures[(int) (Math.random() * splashtextures.length)]);
-					game.newSplashShader.setArgument("u_color", shot.getShotShader().getArgument("u_color"));
+					createSplash(shot.getTranslation().x, shot.getTranslation().z, splashsize,
+							(Vector4f) shot.getShotShader().getArgument("u_color"));
 
 					shots.remove(i);
 					deleteShot(shot);
-
-					for (Vector2f grids : getAffectedSplashGrids(a)) {
-						int x = (int) grids.x;
-						int z = (int) grids.y;
-						if (x >= 0 && z >= 0 && x < game.splashSubdivision && z < game.splashSubdivision) {
-							game.newSplashFramebuffer[x][z].updateTexture();
-							splashGround(x, z);
-						}
-					}
-					game.newSplashShader.removeObject(a);
-
-					a.delete();
 					i--;
 				} else {
 					if (shot.getTranslation().y < -20) {
 						shots.remove(i);
 						deleteShot(shot);
+					}
+				}
+			}
+
+			for (Enemy enemy : movingEnemies) {
+				Damageable damageable = enemy.getDamageable();
+				lifebars.getParticle(damageable.getHealthbarID()).getPosition().set(damageable.getTranslation().x,
+						damageable.getTranslation().y + 2, damageable.getTranslation().z);
+			}
+
+			for (int i = chasers.size() - 1; i >= 0; i--) {
+				if (i < chasers.size()) {
+					Chaser chaser = chasers.get(i);
+					if (chaser.hasExploded()) {
+						createSplash(chaser.getTranslation().x, chaser.getTranslation().z, chaser.getExplosionRange(),
+								(Vector4f) chaser.getColorShader().getArgument("u_color"));
+						for (int a = 0; a < targets.size(); a++) {
+							Damageable damageable = targets.get(a);
+							if (!damageable.equals(chaser)) {
+								Vector3f dist = VecMath.subtraction(damageable.getTranslation(),
+										chaser.getTranslation());
+								double lenSquared = dist.lengthSquared();
+								if (lenSquared < chaser.getExplosionRangeSquared()) {
+									float damagefactor = (float) (1 - lenSquared / chaser.getExplosionRangeSquared());
+									applyDamage(damageable, (int) (chaser.getBaseDamage() * damagefactor));
+									dist.normalize();
+									dist.scale(chaser.getBaseKnockback() * damagefactor);
+									damageable.getBody().applyCentralImpulse(dist);
+								}
+							}
+						}
+						removeEnemy(chaser);
 					}
 				}
 			}
@@ -528,6 +583,70 @@ public class Game implements WindowContent {
 		}
 	}
 
+	public void applyDamage(Damageable damaged, int damage) {
+		damaged.damage(damage);
+		if (damaged.getHealthbarID() == -1) {
+			healthbar.scaleTo(damaged.getHealth() / 100f, 1);
+			healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
+		} else {
+			lifebars.removeParticle(damaged.getHealthbarID());
+			damaged.setHealthbarID(lifebars.addParticle(
+					new Vector3f(damaged.getTranslation().x, damaged.getTranslation().y + 2,
+							damaged.getTranslation().z),
+					zero, enemyLifebarSize, (int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000)));
+		}
+		if (damaged.getHealth() <= 0) {
+			removeEnemy(damaged);
+		}
+	}
+
+	public void createSplash(float splashX, float splashZ, float splashsize, Vector4f color) {
+		Quad a = new Quad(splashX, splashZ, splashsize, splashsize);
+		a.setRenderHints(false, true, false);
+		a.rotate((float) (Math.random() * 360));
+		game.newSplashShader.addObject(a);
+		game.newSplashShader.setArgument("u_texture", splashtextures[(int) (Math.random() * splashtextures.length)]);
+		game.newSplashShader.setArgument("u_color", color);
+
+		for (Vector2f grids : getAffectedSplashGrids(a)) {
+			int x = (int) grids.x;
+			int z = (int) grids.y;
+			if (x >= 0 && z >= 0 && x < game.splashSubdivision && z < game.splashSubdivision) {
+				game.newSplashFramebuffer[x][z].updateTexture();
+				splashGround(x, z);
+			}
+		}
+		game.newSplashShader.removeObject(a);
+
+		a.delete();
+	}
+
+	private void removeEnemy(Damageable damageable) {
+		targets.remove(damageable);
+		enemies.remove(damageable);
+		if (chasers.contains(damageable)) {
+			chasers.remove(damageable);
+			movingEnemies.remove(damageable);
+		}
+		if (damageable.getShooter() != null)
+			shooters.remove(damageable.getShooter());
+		space.removeRigidBody(damageable.getShapedObject(), damageable.getBody());
+		damageable.getShader().removeObject(damageable.getShapedObject());
+		damageable.getShapedObject().delete();
+		if (damageable.getHealthbarID() == -1) {
+			exitGame();
+		} else {
+			lifebars.removeParticle(damageable.getHealthbarID());
+			if (enemies.isEmpty()) {
+				if (isEndless) {
+					spawnWave();
+				} else {
+					exitGame();
+				}
+			}
+		}
+	}
+
 	public void exitGame() {
 		isActive = false;
 		removeAllEnemies();
@@ -536,7 +655,8 @@ public class Game implements WindowContent {
 
 	private void removeAllEnemies() {
 		for (Damageable damaged : targets) {
-			shooters.remove(damaged.getShooter());
+			if (damaged.getShooter() != null)
+				shooters.remove(damaged.getShooter());
 			space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 			damaged.getShader().removeObject(damaged.getShapedObject());
 			damaged.getShapedObject().delete();
@@ -544,6 +664,9 @@ public class Game implements WindowContent {
 				lifebars.removeParticle(damaged.getHealthbarID());
 		}
 		targets.clear();
+		enemies.clear();
+		chasers.clear();
+		movingEnemies.clear();
 	}
 
 	List<Vector2f> affectedSplashGrids = new ArrayList<Vector2f>();
@@ -620,6 +743,7 @@ public class Game implements WindowContent {
 	public void delete() {
 		game.getShader().remove(defaultshader);
 		game.getShader().remove(blackcolorshader);
+		game.getShader().remove(whitecolorshader);
 		game.getShader().remove(playercolorshader);
 		game.getShader().remove(playershader);
 		game.getShader().remove(healthbarshader);
@@ -627,6 +751,7 @@ public class Game implements WindowContent {
 		game.getShaderInterface().remove(redcolorshaderInterface);
 		defaultshader.delete();
 		blackcolorshader.delete();
+		whitecolorshader.delete();
 		playercolorshader.delete();
 		playershader.delete();
 		healthbarshader.delete();
