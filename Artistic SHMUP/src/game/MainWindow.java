@@ -18,7 +18,7 @@ import shader.PostProcessingShader;
 import shader.Shader;
 import shape.Box;
 import shape2d.Quad;
-import sound.NullSoundEnvironment;
+import sound.ALSoundEnvironment;
 import texture.FramebufferObject;
 import texture.Texture;
 import utils.Debugger;
@@ -131,7 +131,7 @@ public class MainWindow extends StandardGame {
 		initDisplay(new GLDisplay(),
 				new DisplayMode(DefaultValues.DEFAULT_DISPLAY_POSITION_X, 20, 1280, 720, "Artful SHMUP", false,
 						DefaultValues.DEFAULT_DISPLAY_RESIZEABLE, DefaultValues.DEFAULT_DISPLAY_FULLSCREEN),
-				new PixelFormat(), new VideoSettings(1280, 720), new NullSoundEnvironment());
+				new PixelFormat(), new VideoSettings(1280, 720), new ALSoundEnvironment());
 		layer2d.setProjectionMatrix(ProjectionHelper.ortho(0, levelsizeX / (float) splashSubdivision,
 				levelsizeZ / (float) splashSubdivision, 0, -1, 1));
 		cam.setFlyCam(false);

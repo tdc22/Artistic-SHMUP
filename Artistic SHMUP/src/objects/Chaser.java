@@ -5,6 +5,7 @@ import math.VecMath;
 import quaternion.Quaternionf;
 import shader.Shader;
 import shape.Sphere;
+import sound.Sound;
 import vector.Vector3f;
 
 public class Chaser extends Sphere implements Damageable, Enemy {
@@ -14,6 +15,7 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 	final Vector3f up = new Vector3f(0, 1, 0);
 	int explosionTimer = 0;
 	boolean isBlinkColor = false;
+	Sound beepsound;
 
 	final float acceleration = 20f;
 	final float maxspeed = 15f;
@@ -28,7 +30,7 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 
 	// sin(x^3)
 	public Chaser(float x, float y, float z, Shader shader, Shader blinkshader, Shader colorshader, int healthbarID,
-			int starthealth) {
+			int starthealth, Sound beepsound) {
 		super(x, y, z, 0.3f, 36, 36);
 		body = new RigidBody3(new EllipsoidShape(x, y, z, 1, 1, 1));
 		body.scale(3);
@@ -44,6 +46,8 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 		maxhealth = starthealth;
 		health = maxhealth;
 		this.healthbarID = healthbarID;
+		this.beepsound = beepsound;
+		beepsound.setSourcePositionRelative(false);
 	}
 
 	public void update(int delta, Player player) {
@@ -52,13 +56,15 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 		if (distanceSquared <= maxChaseDistanceSquared) {
 			if (distanceSquared <= explosionTriggerDistanceSquared) {
 				explosionTimer += delta;
-				float blinktimerhelper = explosionTimer / 500f;
+				float blinktimerhelper = explosionTimer / 700f;
 				float blinktimer = (float) Math.sin(blinktimerhelper * blinktimerhelper * blinktimerhelper);
 				if (blinktimer > 0) {
 					if (!isBlinkColor) {
 						shader.removeObject(this);
 						blinkshader.addObject(this);
 						isBlinkColor = true;
+						beepsound.setPitch(2f + explosionTimer / (float) maxExplosionTimer);
+						beepsound.play();
 					}
 				} else {
 					if (isBlinkColor) {
@@ -161,5 +167,10 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 
 	public float getBaseKnockback() {
 		return baseKnockback;
+	}
+
+	@Override
+	public void updateSoundPosition() {
+		beepsound.setSourcePosition(getTranslation());
 	}
 }

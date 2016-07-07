@@ -130,4 +130,10 @@ public class Tower extends Cylinder implements Shootable, Damageable, Enemy {
 		return this;
 	}
 
+	@Override
+	public void updateSoundPosition() {
+		// TODO Auto-generated method stub
+
+	}
+
 }

@@ -13,6 +13,7 @@ import integration.VerletIntegration;
 import loader.FontLoader;
 import loader.ModelLoader;
 import loader.ShaderLoader;
+import loader.SoundLoader;
 import loader.TextureLoader;
 import manifold.CollisionManifold;
 import manifold.SimpleManifoldManager;
@@ -45,6 +46,8 @@ import shape.Sphere;
 import shape2d.Quad;
 import shapedata.CylinderData;
 import shapedata.SphereData;
+import sound.ALSound;
+import sound.Sound;
 import texture.Texture;
 import vector.Vector2f;
 import vector.Vector3f;
@@ -93,10 +96,13 @@ public class Game implements WindowContent {
 
 	Shader blackcolorshader, whitecolorshader, playercolorshader;
 	Texture[] splashtextures;
+	ALSound beepsound;
+	ALSound[] splashsounds;
 
 	Quad healthbar;
 	SimpleParticleSystem lifebars;
 	final Vector2f enemyLifebarSize = new Vector2f(1, 0.3);
+	final Vector3f up = new Vector3f(0, 1, 0);
 
 	Sphere shotgeometry;
 	CollisionShape3 shotcollisionshape;
@@ -171,6 +177,19 @@ public class Game implements WindowContent {
 		splashtextures[2] = new Texture(TextureLoader.loadTexture("res/textures/splash3.png"));
 		splashtextures[3] = new Texture(TextureLoader.loadTexture("res/textures/splash4.png"));
 		splashtextures[4] = new Texture(TextureLoader.loadTexture("res/textures/splash5.png"));
+
+		beepsound = new ALSound(SoundLoader.loadSound("res/sounds/beep.ogg"));
+		splashsounds = new ALSound[7];
+		splashsounds[0] = new ALSound(SoundLoader.loadSound("res/sounds/splash1.ogg"));
+		splashsounds[1] = new ALSound(SoundLoader.loadSound("res/sounds/splash2.ogg"));
+		splashsounds[2] = new ALSound(SoundLoader.loadSound("res/sounds/splash3.ogg"));
+		splashsounds[3] = new ALSound(SoundLoader.loadSound("res/sounds/splash4.ogg"));
+		splashsounds[4] = new ALSound(SoundLoader.loadSound("res/sounds/splash5.ogg"));
+		splashsounds[5] = new ALSound(SoundLoader.loadSound("res/sounds/splash6.ogg"));
+		splashsounds[6] = new ALSound(SoundLoader.loadSound("res/sounds/splash7.ogg"));
+		for (Sound sound : splashsounds) {
+			sound.setSourcePositionRelative(false);
+		}
 
 		healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
 				"res/shaders/healthbarshader.frag"));
@@ -326,10 +345,11 @@ public class Game implements WindowContent {
 		spawntowers++;
 		spawnchasers++;
 		spawnTowers(spawntowers);
-		spawnChasers(spawnchasers);
+		// spawnChasers(spawnchasers);
 	}
 
 	private void addTower(float x, float y, float z) {
+		System.out.println("Added " + lifebars.getParticleList().size() + "; " + x + "; " + z);
 		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleList().size(), 50);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
@@ -346,7 +366,7 @@ public class Game implements WindowContent {
 	private void addChaser(float x, float y, float z) {
 		Shader colorshader = getRandomShotColorShader();
 		Chaser chaser = new Chaser(x, y, z, blackcolorshader, colorshader, colorshader,
-				lifebars.getParticleList().size(), 70);
+				lifebars.getParticleList().size(), 70, new ALSound(beepsound.getSoundBufferHandle()));
 		space.addRigidBody(chaser, chaser.getBody());
 		blackcolorshader.addObject(chaser);
 		targets.add(chaser);
@@ -506,6 +526,8 @@ public class Game implements WindowContent {
 
 			space.update(delta);
 			physicsdebug.update();
+			game.soundEnvironment.setListenerPosition(player.getTranslation());
+			game.soundEnvironment.setListenerOrientation(up, playerfront);
 
 			for (LateUpdateable lateupdate : lateupdates) {
 				lateupdate.lateUpdate(delta);
@@ -532,6 +554,7 @@ public class Game implements WindowContent {
 					float splashsize = 1.5f + (float) (Math.random() * 1.5f);
 					createSplash(shot.getTranslation().x, shot.getTranslation().z, splashsize,
 							(Vector4f) shot.getShotShader().getArgument("u_color"));
+					playRandomSplashSound(shot.getTranslation());
 
 					shots.remove(i);
 					deleteShot(shot);
@@ -548,6 +571,7 @@ public class Game implements WindowContent {
 				Damageable damageable = enemy.getDamageable();
 				lifebars.getParticle(damageable.getHealthbarID()).getPosition().set(damageable.getTranslation().x,
 						damageable.getTranslation().y + 2, damageable.getTranslation().z);
+				enemy.updateSoundPosition();
 			}
 
 			for (int i = chasers.size() - 1; i >= 0; i--) {
@@ -571,7 +595,8 @@ public class Game implements WindowContent {
 								}
 							}
 						}
-						removeEnemy(chaser);
+						playRandomSplashSound(chaser.getTranslation());
+						removeDamageable(chaser);
 					}
 				}
 			}
@@ -583,20 +608,24 @@ public class Game implements WindowContent {
 		}
 	}
 
+	public void playRandomSplashSound(Vector3f position) {
+		Sound sound = splashsounds[(int) (Math.random() * splashsounds.length)];
+		sound.setSourcePosition(position);
+		sound.play();
+	}
+
 	public void applyDamage(Damageable damaged, int damage) {
 		damaged.damage(damage);
 		if (damaged.getHealthbarID() == -1) {
 			healthbar.scaleTo(damaged.getHealth() / 100f, 1);
 			healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
 		} else {
-			lifebars.removeParticle(damaged.getHealthbarID());
-			damaged.setHealthbarID(lifebars.addParticle(
-					new Vector3f(damaged.getTranslation().x, damaged.getTranslation().y + 2,
-							damaged.getTranslation().z),
-					zero, enemyLifebarSize, (int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000)));
+			System.out.println("Updated " + damaged.getHealthbarID());
+			lifebars.getParticle(damaged.getHealthbarID())
+					.setLifetime((int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000));
 		}
 		if (damaged.getHealth() <= 0) {
-			removeEnemy(damaged);
+			removeDamageable(damaged);
 		}
 	}
 
@@ -621,12 +650,14 @@ public class Game implements WindowContent {
 		a.delete();
 	}
 
-	private void removeEnemy(Damageable damageable) {
+	private void removeDamageable(Damageable damageable) {
 		targets.remove(damageable);
-		enemies.remove(damageable);
-		if (chasers.contains(damageable)) {
-			chasers.remove(damageable);
-			movingEnemies.remove(damageable);
+		if (damageable.getHealthbarID() != -1) {
+			enemies.remove(damageable);
+			if (chasers.contains(damageable)) {
+				chasers.remove(damageable);
+				movingEnemies.remove(damageable);
+			}
 		}
 		if (damageable.getShooter() != null)
 			shooters.remove(damageable.getShooter());
@@ -636,6 +667,7 @@ public class Game implements WindowContent {
 		if (damageable.getHealthbarID() == -1) {
 			exitGame();
 		} else {
+			System.out.println("Removed " + damageable.getHealthbarID());
 			lifebars.removeParticle(damageable.getHealthbarID());
 			if (enemies.isEmpty()) {
 				if (isEndless) {
@@ -660,6 +692,7 @@ public class Game implements WindowContent {
 			space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 			damaged.getShader().removeObject(damaged.getShapedObject());
 			damaged.getShapedObject().delete();
+			System.out.println("Removed " + damaged.getHealthbarID());
 			if (damaged.getHealthbarID() != -1)
 				lifebars.removeParticle(damaged.getHealthbarID());
 		}
