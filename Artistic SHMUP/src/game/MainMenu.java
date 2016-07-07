@@ -18,7 +18,7 @@ import vector.Vector4f;
 public class MainMenu implements WindowContent {
 	MainWindow game;
 	Text start, endless, quit;
-	Shader defaultshader, colorshader, backgroundcolorshader;
+	Shader blackcolorshader, colorshader, backgroundcolorshader;
 	Quad colorpickerbackground, backgroundpickerbackground;
 	boolean isActive;
 
@@ -60,9 +60,11 @@ public class MainMenu implements WindowContent {
 	public void init() {
 		Font menufont = FontLoader.loadFont("res/fonts/DejaVuSans.ttf");
 
-		defaultshader = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert", "res/shaders/defaultshader.frag"));
-		game.addShaderInterface(defaultshader);
+		blackcolorshader = new Shader(
+				ShaderLoader.loadShaderFromFile("res/shaders/colorshader.vert", "res/shaders/colorshader.frag"));
+		blackcolorshader.addArgumentName("u_color");
+		blackcolorshader.addArgument(new Vector4f(0f, 0f, 0f, 1f));
+		game.addShaderInterface(blackcolorshader);
 
 		Vector3f currentcolor = colors.get(colorID);
 		colorshader = new Shader(
@@ -84,18 +86,18 @@ public class MainMenu implements WindowContent {
 		start = new Text("Start", 240, 280, menufont, fontSize);
 		endless = new Text("Endless", 205, 350, menufont, fontSize);
 		quit = new Text("Quit", 255, 420, menufont, fontSize);
-		defaultshader.addObject(new Text("Pick a color:", 1020, 160, menufont, fontSize));
+		blackcolorshader.addObject(new Text("Pick a color:", 1020, 160, menufont, fontSize));
 		colorpickerbackground = new Quad(1110, 250, 52, 52);
-		defaultshader.addObject(colorpickerbackground);
+		blackcolorshader.addObject(colorpickerbackground);
 		colorshader.addObject(new Quad(1110, 250, 50, 50));
-		defaultshader.addObject(new Text("Pick a background:", 980, 400, menufont, fontSize));
+		blackcolorshader.addObject(new Text("Pick a background:", 980, 400, menufont, fontSize));
 		backgroundpickerbackground = new Quad(1110, 490, 52, 52);
-		defaultshader.addObject(backgroundpickerbackground);
+		blackcolorshader.addObject(backgroundpickerbackground);
 		backgroundcolorshader.addObject(new Quad(1110, 490, 50, 50));
 
-		defaultshader.addObject(start);
-		defaultshader.addObject(endless);
-		defaultshader.addObject(quit);
+		blackcolorshader.addObject(start);
+		blackcolorshader.addObject(endless);
+		blackcolorshader.addObject(quit);
 
 		Input inputMouseClick = new Input(Input.MOUSE_EVENT, "Left", MouseInput.MOUSE_BUTTON_DOWN);
 		mouseclick = new InputEvent("Mouseclick", inputMouseClick);
@@ -221,10 +223,10 @@ public class MainMenu implements WindowContent {
 
 	@Override
 	public void delete() {
-		game.getShaderInterface().remove(defaultshader);
+		game.getShaderInterface().remove(blackcolorshader);
 		game.getShaderInterface().remove(colorshader);
 		game.getShaderInterface().remove(backgroundcolorshader);
-		defaultshader.delete();
+		blackcolorshader.delete();
 		colorshader.delete();
 		backgroundcolorshader.delete();
 		game.inputs.removeEvent(mouseclick);

@@ -28,7 +28,6 @@ public class Chaser extends Sphere implements Damageable, Enemy {
 	final int baseDamage = 50;
 	final float baseKnockback = 20;
 
-	// sin(x^3)
 	public Chaser(float x, float y, float z, Shader shader, Shader blinkshader, Shader colorshader, int healthbarID,
 			int starthealth, Sound beepsound) {
 		super(x, y, z, 0.3f, 36, 36);

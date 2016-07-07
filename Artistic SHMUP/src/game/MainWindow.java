@@ -41,6 +41,8 @@ public class MainWindow extends StandardGame {
 	final int halflevelsizeZ = levelsizeZ / 2;
 	final int splashResolution = 512; // power of 2 !!!
 	final int splashSubdivision = 4;
+	final int wallsizeX = 190;
+	final int wallsizeZ = 190;
 
 	Shader[][] splashGroundShaders, splashObjectShaders;
 	FramebufferObject[][] splashGroundFramebuffers;
@@ -149,10 +151,14 @@ public class MainWindow extends StandardGame {
 		debugger = new Debugger(inputs, defaultshader, defaultshaderInterface,
 				FontLoader.loadFont("res/fonts/DejaVuSans.ttf"), cam);
 
-		Shader frameShader = new Shader(
-				ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert", "res/shaders/textureshader.frag"));
+		int textureshaderID = ShaderLoader.loadShaderFromFile("res/shaders/textureshader.vert",
+				"res/shaders/textureshader.frag");
+		Shader frameShader = new Shader(textureshaderID);
 		frameShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wood.png")));
 		addShader(frameShader);
+		Shader wallpaperShader = new Shader(textureshaderID);
+		wallpaperShader.addArgument("u_texture", new Texture(TextureLoader.loadTexture("res/textures/wallpaper.png")));
+		addShader(wallpaperShader);
 
 		Box frame1 = new Box(halflevelsizeX, 0, -3, halflevelsizeX + 6, 1, 3);
 		Box frame2 = new Box(halflevelsizeX, 0, levelsizeZ + 3, halflevelsizeX + 6, 1, 3);
@@ -168,6 +174,10 @@ public class MainWindow extends StandardGame {
 		frameShader.addObject(frame2);
 		frameShader.addObject(frame3);
 		frameShader.addObject(frame4);
+
+		Box wall = new Box(halflevelsizeX, -2, halflevelsizeZ, wallsizeX, 0.1f, wallsizeZ);
+		wall.setRenderHints(false, true, false);
+		wallpaperShader.addObject(wall);
 
 		whitePixelTexture = new Texture(TextureLoader.loadTexture("res/textures/whitePixel.png"));
 

@@ -116,6 +116,9 @@ public class Game implements WindowContent {
 	Shader playerShotShader;
 	List<Shader> shotColorShaders;
 	List<Box> levelgeometry;
+	List<ALSound> splashSoundsTemp;
+	List<Integer> splashSoundRuntimes;
+	final int maxSplashSoundDuration = 10000;
 
 	public Game(MainWindow game, int levelsizeX, int levelsizeZ, Vector3f playercolor, boolean whitebackground,
 			boolean isEndless) {
@@ -187,9 +190,8 @@ public class Game implements WindowContent {
 		splashsounds[4] = new ALSound(SoundLoader.loadSound("res/sounds/splash5.ogg"));
 		splashsounds[5] = new ALSound(SoundLoader.loadSound("res/sounds/splash6.ogg"));
 		splashsounds[6] = new ALSound(SoundLoader.loadSound("res/sounds/splash7.ogg"));
-		for (Sound sound : splashsounds) {
-			sound.setSourcePositionRelative(false);
-		}
+		splashSoundsTemp = new ArrayList<ALSound>();
+		splashSoundRuntimes = new ArrayList<Integer>();
 
 		healthbarshader = new Shader(ShaderLoader.loadShaderFromFile("res/shaders/healthbarshader.vert",
 				"res/shaders/healthbarshader.frag"));
@@ -345,11 +347,10 @@ public class Game implements WindowContent {
 		spawntowers++;
 		spawnchasers++;
 		spawnTowers(spawntowers);
-		// spawnChasers(spawnchasers);
+		spawnChasers(spawnchasers);
 	}
 
 	private void addTower(float x, float y, float z) {
-		System.out.println("Added " + lifebars.getParticleList().size() + "; " + x + "; " + z);
 		Tower tower = new Tower(x, y, z, blackcolorshader, lifebars.getParticleList().size(), 50);
 		space.addRigidBody(tower, tower.getBody());
 		tower.addCannon(new StandardCannon(this, space, tower, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
@@ -527,7 +528,7 @@ public class Game implements WindowContent {
 			space.update(delta);
 			physicsdebug.update();
 			game.soundEnvironment.setListenerPosition(player.getTranslation());
-			game.soundEnvironment.setListenerOrientation(up, playerfront);
+			game.soundEnvironment.setListenerOrientation(up, VecMath.negate(playerfront));
 
 			for (LateUpdateable lateupdate : lateupdates) {
 				lateupdate.lateUpdate(delta);
@@ -574,6 +575,17 @@ public class Game implements WindowContent {
 				enemy.updateSoundPosition();
 			}
 
+			for (int i = splashSoundsTemp.size() - 1; i >= 0; i--) {
+				int time = splashSoundRuntimes.get(i);
+				time += delta;
+				if (time >= this.maxSplashSoundDuration) {
+					splashSoundsTemp.remove(i).delete();
+					splashSoundRuntimes.remove(i);
+				} else {
+					splashSoundRuntimes.set(i, time);
+				}
+			}
+
 			for (int i = chasers.size() - 1; i >= 0; i--) {
 				if (i < chasers.size()) {
 					Chaser chaser = chasers.get(i);
@@ -609,8 +621,11 @@ public class Game implements WindowContent {
 	}
 
 	public void playRandomSplashSound(Vector3f position) {
-		Sound sound = splashsounds[(int) (Math.random() * splashsounds.length)];
+		ALSound sound = new ALSound(splashsounds[(int) (Math.random() * splashsounds.length)].getSoundBufferHandle());
+		sound.setSourcePositionRelative(false);
 		sound.setSourcePosition(position);
+		splashSoundsTemp.add(sound);
+		splashSoundRuntimes.add(0);
 		sound.play();
 	}
 
@@ -620,7 +635,6 @@ public class Game implements WindowContent {
 			healthbar.scaleTo(damaged.getHealth() / 100f, 1);
 			healthbar.translate(damage / 100f * -healthbarHalfSizeX, 0);
 		} else {
-			System.out.println("Updated " + damaged.getHealthbarID());
 			lifebars.getParticle(damaged.getHealthbarID())
 					.setLifetime((int) (damaged.getHealth() / (float) damaged.getMaxHealth() * 1000));
 		}
@@ -667,7 +681,6 @@ public class Game implements WindowContent {
 		if (damageable.getHealthbarID() == -1) {
 			exitGame();
 		} else {
-			System.out.println("Removed " + damageable.getHealthbarID());
 			lifebars.removeParticle(damageable.getHealthbarID());
 			if (enemies.isEmpty()) {
 				if (isEndless) {
@@ -692,7 +705,6 @@ public class Game implements WindowContent {
 			space.removeRigidBody(damaged.getShapedObject(), damaged.getBody());
 			damaged.getShader().removeObject(damaged.getShapedObject());
 			damaged.getShapedObject().delete();
-			System.out.println("Removed " + damaged.getHealthbarID());
 			if (damaged.getHealthbarID() != -1)
 				lifebars.removeParticle(damaged.getHealthbarID());
 		}
@@ -805,6 +817,15 @@ public class Game implements WindowContent {
 			b.delete();
 		}
 		levelgeometry.clear();
+
+		for (Sound s : splashSoundsTemp) {
+			s.delete();
+		}
+		splashSoundRuntimes.clear();
+		for (Sound s : splashsounds) {
+			s.delete();
+		}
+		beepsound.delete();
 
 		game.inputs.removeEvent(eventEsc);
 		game.inputs.removeEvent(eventUp);
