@@ -16,6 +16,12 @@ If you have a question or run into a problem, feel free to message me.
 * WASD: movement
 * Left mouse button: shoot
 
+## Known bugs and issues
+For now I won't continue developing this games due to time constraints. Feedback is still appreciated but I'm already aware of the following issues:
+- loud and generally buggy sound (first time I actually used audio in my engine)
+- you can still pause via ESC but when unpausing the camera rotates very far
+- enemy healthbars in endless-mode sometimes appear over the wrong enemy
+
 ## Source
 If you want to play around with the source code or build your own levels you can setup the source to compile and run locally. However this can be a bit tricky.  
-First you have to setup [JAwesomeEngine](https://github.com/tdc22/JAwesomeEngine) (as described there) and run some tests from the included "Awesome Test" to verify that everything works. Then pull this repository via git (or download the source directly) and link all three JAwesomeEngine-Projects. In Eclipse you can do this by right-clicking the "The Square"-Project -> Properties -> Java Build Path -> Projects and then adding "JAwesomeBase", "JAwesomeEngine" and "JAwesomePhysics". As soon as this is done you should be able to start it by executing Start.java.
+First you have to setup [JAwesomeEngine](https://github.com/tdc22/JAwesomeEngine) (as described there) and run some tests from the included "Awesome Test" to verify that everything works. Then pull this repository via git (or download the source directly) and link all three JAwesomeEngine-Projects. In Eclipse you can do this by right-clicking the "Paint Splash"-Project -> Properties -> Java Build Path -> Projects and then adding "JAwesomeBase", "JAwesomeEngine" and "JAwesomePhysics". As soon as this is done you should be able to start it by executing Start.java.
