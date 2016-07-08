@@ -94,6 +94,7 @@ public class MainMenu implements WindowContent {
 		backgroundpickerbackground = new Quad(1110, 490, 52, 52);
 		blackcolorshader.addObject(backgroundpickerbackground);
 		backgroundcolorshader.addObject(new Quad(1110, 490, 50, 50));
+		blackcolorshader.addObject(new Text("@tdc_22", 1140, 710, menufont, fontSize));
 
 		blackcolorshader.addObject(start);
 		blackcolorshader.addObject(endless);
