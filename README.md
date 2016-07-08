@@ -1,6 +1,10 @@
 # Paint-Splash
 "Paint Splash" is a simple shooter I created within a month using my game (rendering and physics) engine [JAwesomeEngine](https://github.com/tdc22/JAwesomeEngine) for and inspired by [Happie's Generating Art Challenge](https://www.reddit.com/r/TheHappieMakers/comments/4n9g63/game_dev_challenge_generating_art/).
 
+![paintsplasher3](https://cloud.githubusercontent.com/assets/595497/16674553/9c22a9c0-44b9-11e6-9fdd-c7d677fff2c7.png)
+![paintsplasher2](https://cloud.githubusercontent.com/assets/595497/16674559/aa708f6a-44b9-11e6-8713-1217c4f69ed1.png)
+![paintsplasher](https://cloud.githubusercontent.com/assets/595497/16674562/b19e8aee-44b9-11e6-997d-0a93440cd1ed.png)
+
 ## Play Now
 Requirements:
 * Java 8 or higher
