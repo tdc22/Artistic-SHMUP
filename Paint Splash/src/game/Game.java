@@ -20,6 +20,7 @@ import manifold.SimpleManifoldManager;
 import math.VecMath;
 import narrowphase.EPA;
 import narrowphase.GJK;
+import narrowphase.SupportRaycast;
 import objects.Chaser;
 import objects.CollisionShape3;
 import objects.Damageable;
@@ -144,7 +145,7 @@ public class Game implements WindowContent {
 	public void init() {
 		game.display.bindMouse();
 
-		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()),
+		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()), new SupportRaycast(),
 				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
 				new SimpleManifoldManager<Vector3f>());
 		space.setGlobalGravitation(new Vector3f(0, -10, 0));
