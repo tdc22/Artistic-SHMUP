@@ -16,7 +16,7 @@ import loader.ShaderLoader;
 import loader.SoundLoader;
 import loader.TextureLoader;
 import manifold.CollisionManifold;
-import manifold.SimpleManifoldManager;
+import manifold.SimpleManifoldManager3;
 import math.VecMath;
 import narrowphase.EPA;
 import narrowphase.GJK;
@@ -147,7 +147,7 @@ public class Game implements WindowContent {
 
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()), new SupportRaycast(),
 				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
-				new SimpleManifoldManager<Vector3f>());
+				new SimpleManifoldManager3());
 		space.setGlobalGravitation(new Vector3f(0, -10, 0));
 
 		int defaultshaderID = ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert",
@@ -537,7 +537,7 @@ public class Game implements WindowContent {
 
 			for (int i = 0; i < shots.size(); i++) {
 				Shot shot = shots.get(i);
-				CollisionManifold<Vector3f> manifold = space.getFirstCollisionManifold(shot.getBody());
+				CollisionManifold<Vector3f, ?> manifold = space.getFirstCollisionManifold(shot.getBody());
 				if (manifold != null) {
 					RigidBody<Vector3f, ?, ?, ?> other = (manifold.getObjects().getFirst().equals(shot.getBody()))
 							? manifold.getObjects().getSecond() : manifold.getObjects().getFirst();
