@@ -146,8 +146,7 @@ public class Game implements WindowContent {
 		game.display.bindMouse();
 
 		space = new PhysicsSpace(new VerletIntegration(), new SAP(), new GJK(new EPA()), new SupportRaycast(),
-				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f),
-				new SimpleManifoldManager3());
+				new SimpleLinearImpulseResolution(), new ProjectionCorrection(0.01f), new SimpleManifoldManager3());
 		space.setGlobalGravitation(new Vector3f(0, -10, 0));
 
 		int defaultshaderID = ShaderLoader.loadShaderFromFile("res/shaders/defaultshader.vert",
@@ -172,8 +171,8 @@ public class Game implements WindowContent {
 		redcolorshaderInterface.addArgument("u_color", new Vector4f(1, 0, 0, 1));
 		game.addShaderInterface(redcolorshaderInterface);
 
-		physicsdebug = new PhysicsDebug(game.inputs, FontLoader.loadFont("res/fonts/DejaVuSans.ttf"), space,
-				defaultshader);
+		physicsdebug = new PhysicsDebug(game.inputs, defaultshader, FontLoader.loadFont("res/fonts/DejaVuSans.ttf"),
+				space);
 
 		splashtextures = new Texture[5];
 		splashtextures[0] = new Texture(TextureLoader.loadTexture("res/textures/splash1.png"));
@@ -332,12 +331,11 @@ public class Game implements WindowContent {
 		player.addCannon(new StandardCannon(this, space, player, new Vector3f(0, 0, -1), new Vector3f(0, 0, 1),
 				playerShotShader, shotgeometry, shotcollisionshape));
 		/*
-		 * player.addCannon(new StandardCannon(this, space, player, new
-		 * Vector3f(0.8f, 0, -1), new Vector3f(-0.4472136, 0, 0.8944272),
-		 * shotColorShaders.get(1), shotgeometry, shotcollisionshape));
-		 * player.addCannon(new StandardCannon(this, space, player, new
-		 * Vector3f(-0.8f, 0, -1), new Vector3f(0.4472136, 0, 0.8944272),
-		 * shotColorShaders.get(2), shotgeometry, shotcollisionshape));
+		 * player.addCannon(new StandardCannon(this, space, player, new Vector3f(0.8f,
+		 * 0, -1), new Vector3f(-0.4472136, 0, 0.8944272), shotColorShaders.get(1),
+		 * shotgeometry, shotcollisionshape)); player.addCannon(new StandardCannon(this,
+		 * space, player, new Vector3f(-0.8f, 0, -1), new Vector3f(0.4472136, 0,
+		 * 0.8944272), shotColorShaders.get(2), shotgeometry, shotcollisionshape));
 		 */
 
 		setupInputs();
@@ -540,7 +538,8 @@ public class Game implements WindowContent {
 				CollisionManifold<Vector3f, ?> manifold = space.getFirstCollisionManifold(shot.getBody());
 				if (manifold != null) {
 					RigidBody<Vector3f, ?, ?, ?> other = (manifold.getObjects().getFirst().equals(shot.getBody()))
-							? manifold.getObjects().getSecond() : manifold.getObjects().getFirst();
+							? manifold.getObjects().getSecond()
+							: manifold.getObjects().getFirst();
 					Damageable damaged = null;
 					for (Damageable dmg : targets) {
 						if (other.equals(dmg.getBody())) {
